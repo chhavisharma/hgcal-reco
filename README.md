@@ -23,10 +23,14 @@ ML based Reconstruction for HgCal Data. A tracker for work done at Ferrmilabs.\
 ### Summary 
 An attempt to learn algorithms that group detector signatures from the same particle together, and then synthesize those collected data into physically meaningful quantities. Or in simpler terms - An attempt to reconstruct particle Hits to study the properties of LHC particle collision showers in the [CMS](https://home.cern/science/experiments/cms) High-Granularity Calorimeter.
 
-The [High Granularity Calorimeter](https://cms.cern/news/new-era-calorimetry) is used to record particle hits as they flow/ disintegrate/ shower through the it from the LHC. [Calorimetry](https://cms.cern/news/new-era-calorimetry) - the process of measuring the amount of heat released or absorbed during a chemical reaction - is used to record the particle signature at each hit through the HgCal layers. The amount of energy lost along with timestap and exact spatical coordinates are recorded which detail out the evolution of the showers. 
+The [High Granularity Calorimeter](https://cms.cern/news/new-era-calorimetry) is used to record particle hits as they flow/ disintegrate/ shower through the it from the LHC. [Calorimetry](https://cms.cern/news/new-era-calorimetry) - the process of measuring the amount of heat released or absorbed during a chemical reaction - is used to record a particle's signature at each hit through the HgCal layers. The amount of energy lost along with timestap and exact spatical coordinates are recorded which detail out the evolution of the showers. 
 
-Little is known about how we would reconstruct (hypothetical/ new!) non-standard model particles that make weird signatures in the calorimeter, so highlighting the non-confirming particles/hits as a seperate class in the learning algorithm would be an interesting approach.
+An attemp needs to be made to reduce the computation and memory requirements of the reconstruction algorithm along with imporving accuracy and differentiation capability. Little is known about how we would reconstruct (hypothetical/ new!) non-standard model particles that make weird signatures in the calorimeter, so highlighting the non-confirming particles/hits as a seperate class in the learning algorithm would also be an interesting capability.
 
+Ground-truth-labelling: An event consists of a collection of hits over a 25 ns window. Each event is considered as a data sample unit and could have upto 20k particle hits.\
+EdgeNet: ...\
+Union-find Segregation: ...\
+Dynamic Reduction Net: ...\
 
 _________________________________________________________________________________________________
 
