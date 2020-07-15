@@ -30,19 +30,19 @@ Little is known about how the HgCal would reconstruct (hypothetical/ new!) non-s
 
 ### Tentative Roadmap
 
-Optimize Existing Pipeline
-  - Hyperparameter optimization for Segmentation (EdgeNet) and Pooling (Dynamic Reduction Net)
-    - Optimal Neighbours for Graph CNN Accumulation
-    - Optimal number of Pooling Layers
-    - Mean pool v/s Avg Pool 
+- Optimize Existing Pipeline
+    - Hyperparameter optimization for Segmentation (EdgeNet) and Pooling (Dynamic Reduction Net)
+        - Optimal Neighbours for Graph CNN Accumulation
+        - Optimal number of Pooling Layers
+        - Mean pool v/s Avg Pool 
 
-Explore Alternate Reconstruction Methods
-  - End-to-end gradient flow with the current pipeline 
-    - Infuse graph Segregation in the deep network for gradient flow from Reduction all the way to Segmentation
-  - Energy Regression
-    - Attention/ transformer based single shot GNN
-    - Draw from Object Condensation (by Jan K.)
-    - ASAP - Supervised clustering without a limit on K
+- Explore Alternate Reconstruction Methods
+    - End-to-end gradient flow with the current pipeline 
+        - Infuse graph Segregation in the deep network for gradient flow from Reduction all the way to Segmentation
+    - Energy Regression
+        - Attention/ transformer based single shot GNN
+        - Draw from Object Condensation (by Jan K.)
+        - ASAP - Supervised clustering without a limit on K
 
 _________________________________________________________________________________________________
 
