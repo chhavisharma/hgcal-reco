@@ -21,11 +21,11 @@ ML based Reconstruction for HgCal Data. A tracker for work done at Ferrmilabs.\
 -->
 
 ### Summary 
-An attempt to learn algorithms that group detector signatures from the same particle together, and then synthesize those collected data into physically meaningful quantities. Or in simpler terms - An attempt to reconstruct particle Hits to study the properties of LHC particle collision showers in the CMS High-Granularity Calorimeter.
+An attempt to learn algorithms that group detector signatures from the same particle together, and then synthesize those collected data into physically meaningful quantities. Or in simpler terms - An attempt to reconstruct particle Hits to study the properties of LHC particle collision showers in the [CMS](https://home.cern/science/experiments/cms) High-Granularity Calorimeter.
 
-HgCal or High-Granularity Calorimeter is the latest detector used to record particle hits as they flow/disntegrate/shower through the it from the [LHC](https://home.cern/science/accelerators/large-hadron-collider). [Calorimetry](https://cms.cern/news/new-era-calorimetry) - the process of measuring the amount of heat released or absorbed during a chemical reaction - is used to record the particle signature at each hit through the HgCal layers. The amount of energy lost along with timestap and exact spatical coordinates are recorded which detail out the evolution of the showers. 
+The [High Granularity Calorimeter](https://cms.cern/news/new-era-calorimetry) is used to record particle hits as they flow/ disintegrate/ shower through the it from the LHC. [Calorimetry](https://cms.cern/news/new-era-calorimetry) - the process of measuring the amount of heat released or absorbed during a chemical reaction - is used to record the particle signature at each hit through the HgCal layers. The amount of energy lost along with timestap and exact spatical coordinates are recorded which detail out the evolution of the showers. 
 
-Little is known about how the HgCal would reconstruct (hypothetical/ new!) non-standard model particles that make weird signatures in the calorimeter, so highlighting the non-confirming particles using multiclass deep neural nets would be an interesting approach.
+Little is known about how we would reconstruct (hypothetical/ new!) non-standard model particles that make weird signatures in the calorimeter, so highlighting the non-confirming particles/hits as a seperate class in the learning algorithm would be an interesting approach.
 
 
 _________________________________________________________________________________________________
