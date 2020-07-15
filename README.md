@@ -59,7 +59,7 @@ Exisitng Pipeline: Graph Neural Networks are used to model raw HGCal data into p
 
 <p align="center"> Existing Pipeline </p>
 <p align="center">
-  <img src="img/pipeline.PNG" width="400"/>
+  <img src="images/ExistingPipeline.png"/>
 </p>  
 
 _________________________________________________________________________________________________
