@@ -126,6 +126,7 @@ ________________________________________________________________________________
     - Some interesting directions to go:
       - https://arxiv.org/abs/1801.02144 Covariant Compositional Networks For Learning Graphs
       - https://arxiv.org/abs/1911.07979 ASAP: Adaptive Structure Aware Pooling for Learning Hierarchical GraphRepresentations
+    - juniper (Dianna's Suggestion) BinaryJuniprachieves state-of-the-art performancefor quark/gluon discrimination and top-tagging. https://arxiv.org/pdf/1906.10137.pdf
 2. Deployment:
     - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/ 
     - https://github.com/rusty1s/pytorch_geometric/pull/1191
