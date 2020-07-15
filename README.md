@@ -114,4 +114,4 @@ ________________________________________________________________________________
       - https://arxiv.org/abs/1911.07979 ASAP: Adaptive Structure Aware Pooling for Learning Hierarchical GraphRepresentations
 2. Deployment:
     - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/ 
-    - https://github.com/rusty1s/pytorch_geometric/pull/1191 (follow the links further down to see where it actually gets integrated)
+    - https://github.com/rusty1s/pytorch_geometric/pull/1191
