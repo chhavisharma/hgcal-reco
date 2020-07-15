@@ -1,41 +1,23 @@
-# HGCal Recostruction
+## HGCal Recostruction
 ML based Reconstruction for HgCal Data.
 A tracker for work done at Ferrmilabs.
 
-
+<!---
 ### Execution
 * Author: [Chhavi Sharma](https://www.linkedin.com/in/chhavi275/)
 * Tested on: *TBD*
 * Installation Instructions: *TBD*
 * Execution Instructions: *TBD*
-
+-->
 
 ### Summary 
 An attempt to learn algorithms that group detector signatures from the same particle together, and then synthesize those collected data into physically meaningful quantities. Or in simpler terms - An attempt to reconstruct particle Hits to study the properties of LHC particle collision showers in the CMS High-Granularity Calorimeter.
 
-<p align="center"> CMS High-Granularity Calorimeter </p>
-<p align="center">
-  <img src="img/hgcal.PNG" width="400"/>
-</p>   
-
-**HgCal** or High-Granularity Calorimeter is the latest detector used to record particle hits as they flow/disntegrate/shower through the it from the [LHC](https://home.cern/science/accelerators/large-hadron-collider). [Calorimetry](https://cms.cern/news/new-era-calorimetry) - the process of measuring the amount of heat released or absorbed during a chemical reaction - is used to record the particle signature at each hit through the HgCal layers. The amount of energy lost along with timestap and exact spatical coordinates are recorded which detail out the evolution of the showers. 
+HgCal or High-Granularity Calorimeter is the latest detector used to record particle hits as they flow/disntegrate/shower through the it from the [LHC](https://home.cern/science/accelerators/large-hadron-collider). [Calorimetry](https://cms.cern/news/new-era-calorimetry) - the process of measuring the amount of heat released or absorbed during a chemical reaction - is used to record the particle signature at each hit through the HgCal layers. The amount of energy lost along with timestap and exact spatical coordinates are recorded which detail out the evolution of the showers. 
 
 Little is known about how the HgCal would reconstruct (hypothetical/ new!) non-standard model particles that make weird signatures in the calorimeter, so highlighting the non-confirming particles using multiclass deep neural nets would be an interesting approach.
 
-
-__________________________________________________________________________________________________________
-
-**Exisitng Pipeline**
-Graph Neural Networks are used to model raw HGCal data into particle shower clusters in these 4 categories.
-  - 0 Noise
-  - 1 Hadrons: ...
-  - 2 EM Particles: ...
-  - 3 Mips: ...
-
-<p align="center"> Existing Pipeline </p>
-<p align="center">
-  <img src="img/pipeline.PNG" width="400"/>
-</p>  
+_________________________________________________________________________________________________
 
 ### Tentative Roadmap
 
@@ -57,22 +39,41 @@ Explore Alternate Reconstruction Methods
 
 ### Weekly Tracking
 
-#### Week 1 
+##### Week 1 
+Exisitng Pipeline: Graph Neural Networks are used to model raw HGCal data into particle shower clusters in these 4 categories.
+  - 0 Noise
+  - 1 Hadrons: ...
+  - 2 EM Particles: ...
+  - 3 Mips: ...
+
+<p align="center"> Existing Pipeline </p>
+<p align="center">
+  <img src="img/pipeline.PNG" width="400"/>
+</p>  
+
+
+_________________________________________________________________________________________________
+
+##### Week 2
 
 
 
-#### Week 2
+
+_________________________________________________________________________________________________
+
+##### Week 3
 
 
 
-#### Week 3
+
+_________________________________________________________________________________________________
+
+##### Week 4
 
 
 
-#### Week 4
 
-
-__________________________________________________________________________________________________________
+_________________________________________________________________________________________________
 
 
 ### Resources and References 
