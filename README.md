@@ -121,8 +121,8 @@ ________________________________________________________________________________
       - https://arxiv.org/abs/1801.07829  
       - https://arxiv.org/abs/1902.07987 
       - https://arxiv.org/abs/2003.08013  
-    - An interesting specialized loss:- https://arxiv.org/abs/2002.03605 OBJECT CONDENSATION
-    - More specific example papers- https://arxiv.org/abs/2003.11603 Graph Neural Networks for Particle Reconstruction in High Energy Physics detectors.
+    - An interesting specialized loss - OBJECT CONDENSATION https://arxiv.org/abs/2002.03605 
+    - More specific example papers- Graph Neural Networks for Particle Reconstruction in High Energy Physics detectors https://arxiv.org/abs/2003.11603 
     - Some interesting directions to go:
       - Covariant Compositional Networks For Learning Graphs https://arxiv.org/abs/1801.02144      
       - ASAP: Adaptive Structure Aware Pooling for Learning Hierarchical GraphRepresentations https://arxiv.org/abs/1911.07979 
