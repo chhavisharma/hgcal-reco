@@ -124,8 +124,8 @@ ________________________________________________________________________________
     - An interesting specialized loss:- https://arxiv.org/abs/2002.03605 OBJECT CONDENSATION
     - More specific example papers- https://arxiv.org/abs/2003.11603 Graph Neural Networks for Particle Reconstruction in High Energy Physics detectors.
     - Some interesting directions to go:
-      - https://arxiv.org/abs/1801.02144 Covariant Compositional Networks For Learning Graphs
-      - https://arxiv.org/abs/1911.07979 ASAP: Adaptive Structure Aware Pooling for Learning Hierarchical GraphRepresentations
+      - Covariant Compositional Networks For Learning Graphs https://arxiv.org/abs/1801.02144      
+      - ASAP: Adaptive Structure Aware Pooling for Learning Hierarchical GraphRepresentations https://arxiv.org/abs/1911.07979 
     - Juniper (Dianna's Suggestion) Binary Junipr achieves state-of-the-art performancefor quark/gluon discrimination and top-tagging. https://arxiv.org/pdf/1906.10137.pdf
 2. Deployment:
     - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/ 
