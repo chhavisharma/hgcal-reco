@@ -35,7 +35,7 @@ ________________________________________________________________________________
 
 - Retrain EdgeNet and Dynamic Reduction Net 
     - Setup Google Cloud VM
-    - Transition to Pytorch 1.5.1 and CUDA 10.2
+    - Transition to Pytorch 1.5.1 and CUDA 10.2 and corresponding pytorch geometric verison
     - Understand existing pipleine
     - Breakdown data preprocessing and compute statistics
     
