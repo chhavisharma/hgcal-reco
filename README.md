@@ -28,6 +28,9 @@ HgCal or High-Granularity Calorimeter is the latest detector used to record part
 Little is known about how the HgCal would reconstruct (hypothetical/ new!) non-standard model particles that make weird signatures in the calorimeter, so highlighting the non-confirming particles using multiclass deep neural nets would be an interesting approach.
 
 
+_________________________________________________________________________________________________
+
+
 ### Tentative Roadmap
 
 - Retrain EdgeNet and Dynamic Reduction Net 
