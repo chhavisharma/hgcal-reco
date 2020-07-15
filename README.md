@@ -84,6 +84,11 @@ ________________________________________________________________________________
 Re-training EdgeNet
 Re-training Dynamic Reduction Net
 
+
+<p align="center"> Existing Pipeline </p>
+<p align="center">
+  <img src="images/EdgeNetTraining.png"/>
+</p>  
 _________________________________________________________________________________________________
 
 ##### Week Jul 13 - Jul 17
