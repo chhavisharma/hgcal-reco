@@ -30,7 +30,7 @@ An attemp needs to be made to reduce the computation and memory requirements of 
 Ground-truth-labelling: An event consists of a collection of hits over a 25 ns window. Each event is considered as a data sample unit and could have upto 20k particle hits.\
 EdgeNet: ...\
 Union-find Segregation: ...\
-Dynamic Reduction Net: ...\
+Dynamic Reduction Net: ... 
 
 _________________________________________________________________________________________________
 
