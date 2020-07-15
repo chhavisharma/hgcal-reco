@@ -30,6 +30,12 @@ Little is known about how the HgCal would reconstruct (hypothetical/ new!) non-s
 
 ### Tentative Roadmap
 
+- Retrain EdgeNet and Dynamic Reduction Net 
+    - Setup Google Cloud VM
+    - Transition to Pytorch 1.5.1 and CUDA 10.2
+    - Understand existing pipleine
+    - Breakdown data preprocessing and compute statistics
+    
 - Optimize Existing Pipeline
     - Hyperparameter optimization for Segmentation (EdgeNet) and Pooling (Dynamic Reduction Net)
         - Optimal Neighbours for Graph CNN Accumulation
