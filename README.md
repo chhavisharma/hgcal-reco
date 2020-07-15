@@ -2,6 +2,15 @@
 ML based Reconstruction for HgCal Data.
 A tracker for work done at Ferrmilabs.
 
+### Index
+- [Summary](https://github.com/chhavisharma/CIS565_FinalProject#objective)
+- [Tentative Roadmap](https://github.com/chhavisharma/CIS565_FinalProject#background)
+- [Week Jun 29 - Jul 3](https://github.com/chhavisharma/CIS565_FinalProject#motivation)
+- [Week Jun 6  - Jul 10](https://github.com/chhavisharma/CIS565_FinalProject#motivation)
+- [Week Jun 13 - Jul 17](https://github.com/chhavisharma/CIS565_FinalProject#motivation)
+- [Resources and References](https://github.com/chhavisharma/CIS565_FinalProject#resources-and-references)
+
+
 <!---
 ### Execution
 * Author: [Chhavi Sharma](https://www.linkedin.com/in/chhavi275/)
@@ -17,7 +26,6 @@ HgCal or High-Granularity Calorimeter is the latest detector used to record part
 
 Little is known about how the HgCal would reconstruct (hypothetical/ new!) non-standard model particles that make weird signatures in the calorimeter, so highlighting the non-confirming particles using multiclass deep neural nets would be an interesting approach.
 
-_________________________________________________________________________________________________
 
 ### Tentative Roadmap
 
@@ -35,11 +43,13 @@ Explore Alternate Reconstruction Methods
     - Draw from Object Condensation (by Jan K.)
     - ASAP - Supervised clustering without a limit on K
 
-
+_________________________________________________________________________________________________
 
 ### Weekly Tracking
 
-##### Week 1 
+
+##### Week Jun 29 - Jul 3
+ 
 Exisitng Pipeline: Graph Neural Networks are used to model raw HGCal data into particle shower clusters in these 4 categories.
   - 0 Noise
   - 1 Hadrons: ...
@@ -50,25 +60,25 @@ Exisitng Pipeline: Graph Neural Networks are used to model raw HGCal data into p
 <p align="center">
   <img src="img/pipeline.PNG" width="400"/>
 </p>  
-
-
 _________________________________________________________________________________________________
 
-##### Week 2
-
-
-
-
-_________________________________________________________________________________________________
-
-##### Week 3
+##### Week Jul 6 - Jul 10
 
 
 
 
 _________________________________________________________________________________________________
 
-##### Week 4
+##### Week Jul 13 - Jul 17
+
+
+
+
+
+_________________________________________________________________________________________________
+
+##### Week Jul 20 - Jul 24
+
 
 
 
