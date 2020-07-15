@@ -77,26 +77,19 @@ ________________________________________________________________________________
 
 ### Resources and References 
 
-1. On the more general side of things:
-      - The "paper" [https://arxiv.org/abs/1611.08097](https://arxiv.org/abs/1611.08097)
-      - A good review paper: [https://arxiv.org/abs/1812.08434](https://arxiv.org/abs/1812.08434)
-
-2. The kinds of networks we typically use:
-       - https://arxiv.org/abs/1612.00222 
-       - https://arxiv.org/abs/1801.07829  
-       - https://arxiv.org/abs/1902.07987 
-       - https://arxiv.org/abs/2003.08013  
-
-3. One specialized loss that is curious but fiddly:
-       - https://arxiv.org/abs/2002.03605 OBJECT CONDENSATION
-
-4. More specific example papers:
-       - https://arxiv.org/abs/2003.11603  [Graph Neural Networks for Particle Reconstruction in High Energy Physics detectors]
- 
-5. Some possibly interesting directions to go:
-       - https://arxiv.org/abs/1801.02144 <— Covariant Compositional Networks For Learning Graphs
-       - https://arxiv.org/abs/1911.07979 <-- this one I am very curious to try, it's quite similar to object condensation, etc. but better formulated [ASAP: Adaptive Structure Aware Pooling for Learning Hierarchical GraphRepresentations]
-
-6. For deployment stuff, we're heavily into pytorch and nvidia triton:
-      - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/ 
-      - https://github.com/rusty1s/pytorch_geometric/pull/1191 (follow the links further down to see where it actually gets integrated)
+1. GNN Papers: 
+    - The "paper" [https://arxiv.org/abs/1611.08097](https://arxiv.org/abs/1611.08097)
+    - A good review paper: [https://arxiv.org/abs/1812.08434](https://arxiv.org/abs/1812.08434)
+    - Networks typically used:
+      - https://arxiv.org/abs/1612.00222 
+      - https://arxiv.org/abs/1801.07829  
+      - https://arxiv.org/abs/1902.07987 
+      - https://arxiv.org/abs/2003.08013  
+    - One specialized loss that is curious but fiddly:- https://arxiv.org/abs/2002.03605 OBJECT CONDENSATION LOSS
+    - More specific example papers- https://arxiv.org/abs/2003.11603 Graph Neural Networks for Particle Reconstruction in High Energy Physics detectors.
+    - Some possibly interesting directions to go:
+      - https://arxiv.org/abs/1801.02144 Covariant Compositional Networks For Learning Graphs
+      - https://arxiv.org/abs/1911.07979 ASAP: Adaptive Structure Aware Pooling for Learning Hierarchical GraphRepresentations
+2. Deployment:
+    - https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/ 
+    - https://github.com/rusty1s/pytorch_geometric/pull/1191 (follow the links further down to see where it actually gets integrated)
