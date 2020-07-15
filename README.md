@@ -33,11 +33,12 @@ ________________________________________________________________________________
 
 ### Tentative Roadmap
 
-- Retrain EdgeNet and Dynamic Reduction Net 
+- Complete retraining of the pipeline
     - Setup Google Cloud VM
-    - Transition to Pytorch 1.5.1 and CUDA 10.2 and corresponding pytorch geometric verison
+        - Transition to Pytorch 1.5.1 and CUDA 10.2 and corresponding pytorch geometric verison
     - Understand existing pipleine
-    - Breakdown data preprocessing and compute statistics
+        - Breakdown data preprocessing and compute statistics
+        - Retrain the entire pipline - EdgeNet and Dynamic Reduction Net
     
 - Optimize Existing Pipeline
     - Hyperparameter optimization for Segmentation (EdgeNet) and Pooling (Dynamic Reduction Net)
