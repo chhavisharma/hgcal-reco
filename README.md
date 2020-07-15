@@ -3,12 +3,12 @@ ML based Reconstruction for HgCal Data.
 A tracker for work done at Ferrmilabs.
 
 ### Index
-- [Summary](https://github.com/chhavisharma/CIS565_FinalProject#objective)
-- [Tentative Roadmap](https://github.com/chhavisharma/CIS565_FinalProject#background)
-- [Week Jun 29 - Jul 3](https://github.com/chhavisharma/CIS565_FinalProject#motivation)
-- [Week Jun 6  - Jul 10](https://github.com/chhavisharma/CIS565_FinalProject#motivation)
-- [Week Jun 13 - Jul 17](https://github.com/chhavisharma/CIS565_FinalProject#motivation)
-- [Resources and References](https://github.com/chhavisharma/CIS565_FinalProject#resources-and-references)
+- [Summary](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#summary)
+- [Tentative Roadmap](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#tentative-roadmap)
+- [Week Jun 29 - Jul 3](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jun-29---jul-3)
+- [Week Jun 6  - Jul 10](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-6---jul-10)
+- [Week Jun 13 - Jul 17](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jun-13---jul-17)
+- [Resources and References](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#resources-and-references)
 
 
 <!---
@@ -60,6 +60,7 @@ Exisitng Pipeline: Graph Neural Networks are used to model raw HGCal data into p
 <p align="center">
   <img src="img/pipeline.PNG" width="400"/>
 </p>  
+
 _________________________________________________________________________________________________
 
 ##### Week Jul 6 - Jul 10
