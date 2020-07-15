@@ -107,7 +107,9 @@ ________________________________________________________________________________
 
 ### Resources and References 
 0. The standard Model https://home.cern/science/physics/standard-model
-
+<p align="center">
+  <img src="https://cds.cern.ch/images/OPEN-PHO-CHART-2015-001-1/file?size=medium"/>
+</p>  
 1. GNN Papers: 
     - The "paper" [https://arxiv.org/abs/1611.08097](https://arxiv.org/abs/1611.08097)
     - A good review paper: [https://arxiv.org/abs/1812.08434](https://arxiv.org/abs/1812.08434)
