@@ -25,7 +25,7 @@ An attempt to learn algorithms that group detector signatures from the same part
 
 The [High Granularity Calorimeter](https://cms.cern/news/new-era-calorimetry) is used to record particle hits as they flow/ disintegrate/ shower through the it from the LHC. [Calorimetry](https://cms.cern/news/new-era-calorimetry) - the process of measuring the amount of heat released or absorbed during a chemical reaction - is used to record a particle's signature at each hit through the HgCal layers. The amount of energy lost along with timestap and exact spatial coordinates are recorded which detail out the evolution of the showers. 
 
-An attemp needs to be made to reduce the computation and memory requirements of the reconstruction algorithm along with imporving accuracy and differentiation capability. Little is known about how we would reconstruct (hypothetical/ new!) non-standard model particles that make weird signatures in the calorimeter, so highlighting the non-confirming particles/hits as a seperate class in the learning algorithm would also be an interesting capability.
+An attemp needs to be made to reduce the computation and memory requirements of the reconstruction algorithm along with imporving accuracy and discrimination capability. Little is known about how we would reconstruct (hypothetical/ new!) non-standard model particles that make weird signatures in the calorimeter, so highlighting the non-confirming particles/hits as a seperate class in the learning algorithm would also be an interesting capability.
 
 Ground-truth-labelling: An event consists of a collection of hits over a 25 ns window. Each event is considered as a data sample unit and could have upto 20k particle hits.\
 EdgeNet: ...\
