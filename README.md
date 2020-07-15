@@ -81,21 +81,24 @@ ________________________________________________________________________________
 ##### Week Jul 6 - Jul 10
 
 
-
+Re-training EdgeNet
+Re-training Dynamic Reduction Net
 
 _________________________________________________________________________________________________
 
 ##### Week Jul 13 - Jul 17
 
-
-
+Hyperparameter Tuning
+Optimal Neighbours for Graph CNN Accumulation
+Optimal number of Pooling Layers
+Mean pool v/s Avg Pool 
 
 
 _________________________________________________________________________________________________
 
 ##### Week Jul 20 - Jul 24
 
-
+Paper Discussion - [ASAP](https://arxiv.org/abs/1911.07979) with [MultiLabelMarginLoss](https://pytorch.org/docs/stable/nn.html#multilabelmarginloss)
 
 
 
