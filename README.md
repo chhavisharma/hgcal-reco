@@ -93,7 +93,7 @@ Re-training Dynamic Reduction Net
 
 _________________________________________________________________________________________________
 
-##### Week Jun 13 - Jul 17
+##### Week Jul 13 - Jul 17
 
 Hyperparameter Tuning
 Optimal Neighbours for Graph CNN Accumulation
