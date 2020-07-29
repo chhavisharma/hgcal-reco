@@ -106,7 +106,9 @@ ________________________________________________________________________________
 ##### Week Jul 20 - Jul 24
 
 Paper Discussion - [ASAP](https://arxiv.org/abs/1911.07979) with [MultiLabelMarginLoss](https://pytorch.org/docs/stable/nn.html#multilabelmarginloss)
-Lost a lot of work time [Moving] Must catch up.
+
+Lost a lot of work time 
+[Moving] Must catch up.
 
 _________________________________________________________________________________________________
 
