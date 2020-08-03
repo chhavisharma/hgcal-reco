@@ -10,6 +10,8 @@ ML based Reconstruction for HgCal Data. A tracker for work done at Fermilabs.\
 - [Week Jun 29 - Jul 3](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jun-29---jul-3)
 - [Week Jun 6  - Jul 10](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-6---jul-10)
 - [Week Jul 13 - Jul 17](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-13---jul-17)
+- [Week Jul 20 - Jul 24](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-13---jul-17)
+- [Week Jul 27 - Jul 31](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-13---jul-17)
 - [Resources and References](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#resources-and-references)
 
 
@@ -109,6 +111,13 @@ Paper Discussion - [ASAP](https://arxiv.org/abs/1911.07979) with [MultiLabelMarg
 
 Lost a lot of work time 
 [Moving] Must catch up.
+
+_________________________________________________________________________________________________
+
+
+##### Week Jul 27 - Jul 31
+
+ASAP Sample Example - prototyping layers
 
 _________________________________________________________________________________________________
 
