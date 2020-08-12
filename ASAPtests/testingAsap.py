@@ -24,8 +24,6 @@ import pdb
 
 '''NET PROPERTIES'''
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-results = []
-
 
 def logger(info):
     fold, epoch = info['fold'] + 1, info['epoch']
@@ -282,6 +280,7 @@ def main():
     hiddens = [128]    
     datasets = ['PROTEINS']
     nets = [ASAP]
+    results = []
 
     for dataset_name, Net in product(datasets, nets): 
     # over a list of net definitions / only one here
