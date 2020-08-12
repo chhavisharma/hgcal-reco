@@ -1,3 +1,14 @@
+'''PYTHON'''
+from sklearn.model_selection import StratifiedKFold
+from itertools import product
+import os.path as osp
+import numpy as np
+import time
+import tqdm
+import argparse
+import pdb
+import math
+
 '''TORCH'''
 import torch
 from torch import tensor
@@ -13,16 +24,6 @@ from torch_geometric.datasets import TUDataset
 from torch_geometric.utils import degree
 from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
 
-'''PYTHON'''
-from sklearn.model_selection import StratifiedKFold
-from itertools import product
-import os.path as osp
-import time
-import tqdm
-import argparse
-import pdb
-
-'''NET PROPERTIES'''
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 def logger(info):
@@ -138,11 +139,95 @@ class ASAP(torch.nn.Module):
     def __repr__(self):
         return self.__class__.__name__
 
+def fixed_train_val_set(dataset, model, folds, epochs, batch_size,
+                                  lr, lr_decay_factor, lr_decay_step_size,
+                                  weight_decay, logger=None):
+
+    val_losses, accs, durations = [], [], []
+    
+    fulllen = len(dataset)
+    tv_frac = 0.20
+    tv_num = math.ceil(fulllen*tv_frac)
+    splits = np.cumsum([fulllen-tv_num,0,tv_num])
+    splits = splits.astype(np.int32)
+    print('fulllen:', fulllen,' splits:', splits)
+    # pdb.set_trace()  
+
+    train_dataset = torch.utils.data.Subset(dataset,np.arange(start=0,stop=splits[0]).tolist() )
+    valid_dataset = torch.utils.data.Subset(dataset,np.arange(start=splits[1],stop=splits[2]).tolist() )
+
+    train_loader = DataLoader(train_dataset, batch_size=batch_size, pin_memory=True)
+    valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False)
+
+    train_samples = len(train_dataset)
+    valid_samples = len(valid_dataset)
+
+    d = dataset
+    num_features = d.num_features
+    num_classes = d[0].y.dim() if d[0].y.dim() == 1 else d[0].y.size(1)
+
+    # pdb.set_trace()
+    # train_dataset = dataset[train_idx]
+    # test_dataset = dataset[test_idx]
+    # val_dataset = dataset[val_idx]
+    # train_loader = DataLoader(train_dataset, batch_size, shuffle=True)
+    # val_loader = DataLoader(val_dataset, batch_size, shuffle=False)
+    # test_loader = DataLoader(test_dataset, batch_size, shuffle=False)
+
+    model.to(device).reset_parameters()
+    optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+    t_start = time.perf_counter()
+
+    for epoch in range(1, epochs + 1):
+        train_loss = train(model, optimizer, train_loader)
+        val_losses.append(eval_loss(model, val_loader))
+        accs.append(eval_acc(model, val_loader))
+        eval_info = {
+            'fold': fold,
+            'epoch': epoch,
+            'train_loss': train_loss,
+            'val_loss': val_losses[-1],
+            'test_acc': accs[-1],
+        }
+
+        if logger is not None:
+            logger(eval_info)
+
+        if epoch % lr_decay_step_size == 0:
+            for param_group in optimizer.param_groups:
+                param_group['lr'] = lr_decay_factor * param_group['lr']
+
+    if torch.cuda.is_available():
+        torch.cuda.synchronize()
+
+    t_end = time.perf_counter()
+    durations.append(t_end - t_start)
+
+    loss, acc, duration = tensor(val_losses), tensor(accs), tensor(durations)
+    # loss, acc = loss.view(folds, epochs), acc.view(folds, epochs)
+    loss, argmin = loss.min(dim=1)
+    # acc = acc[torch.arange(folds, dtype=torch.long), argmin]
+
+    loss_mean = loss.mean().item()
+    acc_mean = acc.mean().item()
+    acc_std = acc.std().item()
+    duration_mean = duration.mean().item()
+    print('Val Loss: {:.4f}, Test Accuracy: {:.3f} ± {:.3f}, Duration: {:.3f}'.
+          format(loss_mean, acc_mean, acc_std, duration_mean))
+
+    return loss_mean, acc_mean, acc_std
+
+
 def cross_validation_with_val_set(dataset, model, folds, epochs, batch_size,
                                   lr, lr_decay_factor, lr_decay_step_size,
                                   weight_decay, logger=None):
 
     val_losses, accs, durations = [], [], []
+    
     for fold, (train_idx, test_idx,
                val_idx) in enumerate(zip(*k_fold(dataset, folds))):
 
@@ -235,12 +320,14 @@ def num_graphs(data):
 def train(model, optimizer, loader):
     model.train()
     print("In Trainer")
+    print("data loader size = ", len(loader))
+
     total_loss = 0
     for data in tqdm.tqdm(loader):      
         optimizer.zero_grad()
         data = data.to(device)
         
-        # pdb.set_trace()
+        pdb.set_trace()
         # print(data)
 
         out = model(data)
@@ -307,6 +394,7 @@ def main():
             for name, param in model.named_parameters():    
                 print(name, param.shape)
 
+            '''
             loss, acc, std = cross_validation_with_val_set(
                 dataset,
                 model,
@@ -319,6 +407,21 @@ def main():
                 weight_decay=0,
                 logger=None,
             )
+            '''
+
+            loss, acc, std = fixed_train_val_set(
+                dataset,
+                model,
+                folds=None,
+                epochs=args.epochs,
+                batch_size=args.batch_size,
+                lr=args.lr,
+                lr_decay_factor=args.lr_decay_factor,
+                lr_decay_step_size=args.lr_decay_step_size,
+                weight_decay=0,
+                logger=None,
+            )
+
             if loss < best_result[0]:
                 best_result = (loss, acc, std)
 
@@ -332,10 +435,12 @@ if __name__ == "__main__" :
     
     parser = argparse.ArgumentParser()
     parser.add_argument('--epochs', type=int, default=10)
-    parser.add_argument('--batch_size', type=int, default=10)
+    parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.01)
     parser.add_argument('--lr_decay_factor', type=float, default=0.5)
     parser.add_argument('--lr_decay_step_size', type=int, default=50)
+    parser.add_argument('--plot_results',type=int, default=0) # 'will plot results if 1'
+
     args = parser.parse_args()
 
     main()
