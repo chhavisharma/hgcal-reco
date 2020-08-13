@@ -32,7 +32,6 @@ def logger(info):
     print('{:02d}/{:03d}: Val Loss: {:.4f}, Test Accuracy: {:.3f}'.format(
         fold, epoch, val_loss, test_acc))
 
-
 class NormalizedDegree(object):
     def __init__(self, mean, std):
         self.mean = mean
@@ -157,7 +156,7 @@ def fixed_train_val_set(dataset, model, folds, epochs, batch_size,
     valid_dataset = torch.utils.data.Subset(dataset,np.arange(start=splits[1],stop=splits[2]).tolist() )
 
     train_loader = DataLoader(train_dataset, batch_size=batch_size, pin_memory=True)
-    valid_loader = DataLoader(valid_dataset, batch_size=1, shuffle=False)
+    val_loader  = DataLoader(valid_dataset, batch_size=1, shuffle=False)
 
     train_samples = len(train_dataset)
     valid_samples = len(valid_dataset)
@@ -187,17 +186,18 @@ def fixed_train_val_set(dataset, model, folds, epochs, batch_size,
         val_losses.append(eval_loss(model, val_loader))
         accs.append(eval_acc(model, val_loader))
         eval_info = {
-            'fold': fold,
+            'fold': None,
             'epoch': epoch,
             'train_loss': train_loss,
             'val_loss': val_losses[-1],
             'test_acc': accs[-1],
         }
 
+        print('Eval INfo:', eval_info)
         if logger is not None:
             logger(eval_info)
 
-        if epoch % lr_decay_step_size == 0:
+        if (epoch+1) % lr_decay_step_size == 0:
             for param_group in optimizer.param_groups:
                 param_group['lr'] = lr_decay_factor * param_group['lr']
 
@@ -208,19 +208,22 @@ def fixed_train_val_set(dataset, model, folds, epochs, batch_size,
     durations.append(t_end - t_start)
 
     loss, acc, duration = tensor(val_losses), tensor(accs), tensor(durations)
+    
+    
+    # pdb.set_trace()
     # loss, acc = loss.view(folds, epochs), acc.view(folds, epochs)
-    loss, argmin = loss.min(dim=1)
+    # loss, argmin = loss.min(dim=1)
     # acc = acc[torch.arange(folds, dtype=torch.long), argmin]
 
+    loss   = loss.min()
+    argmin = loss.argmin() 
     loss_mean = loss.mean().item()
     acc_mean = acc.mean().item()
     acc_std = acc.std().item()
     duration_mean = duration.mean().item()
-    print('Val Loss: {:.4f}, Test Accuracy: {:.3f} ± {:.3f}, Duration: {:.3f}'.
-          format(loss_mean, acc_mean, acc_std, duration_mean))
+    print('Val Loss: {:.4f}, Test Accuracy: {:.3f} ± {:.3f}, Duration: {:.3f}s'.format(loss_mean, acc_mean, acc_std, duration_mean))
 
     return loss_mean, acc_mean, acc_std
-
 
 def cross_validation_with_val_set(dataset, model, folds, epochs, batch_size,
                                   lr, lr_decay_factor, lr_decay_step_size,
@@ -327,7 +330,6 @@ def train(model, optimizer, loader):
         optimizer.zero_grad()
         data = data.to(device)
         
-        pdb.set_trace()
         # print(data)
 
         out = model(data)
@@ -335,6 +337,7 @@ def train(model, optimizer, loader):
         loss.backward()
         total_loss += loss.item() * num_graphs(data)
         optimizer.step()
+        # pdb.set_trace()
     return total_loss / len(loader.dataset)
 
 def eval_acc(model, loader):
@@ -346,6 +349,7 @@ def eval_acc(model, loader):
         with torch.no_grad():
             pred = model(data).max(1)[1]
         correct += pred.eq(data.y.view(-1)).sum().item()
+        # pdb.set_trace()
     return correct / len(loader.dataset)
 
 def eval_loss(model, loader):
@@ -434,9 +438,9 @@ def main():
 if __name__ == "__main__" :
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=10)
+    parser.add_argument('--epochs', type=int, default=20)
     parser.add_argument('--batch_size', type=int, default=1)
-    parser.add_argument('--lr', type=float, default=0.01)
+    parser.add_argument('--lr', type=float, default=0.005)
     parser.add_argument('--lr_decay_factor', type=float, default=0.5)
     parser.add_argument('--lr_decay_step_size', type=int, default=50)
     parser.add_argument('--plot_results',type=int, default=0) # 'will plot results if 1'
