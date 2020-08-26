@@ -405,7 +405,6 @@ class TrackMLParticleTrackingDataset(Dataset):
         for te in tqdm(task_events[idx]):
             self.process_event(te)
 
-
     def process_event(self, idx):
         hits, particles, truth = self.read_event(idx)
         pos, layer, particle, eta, particle_label, tps = self.select_hits(hits, particles, truth)
@@ -421,8 +420,7 @@ class TrackMLParticleTrackingDataset(Dataset):
         true_eta = torch.from_numpy(tps['eta'].values)
         true_phi = torch.from_numpy(tps['phi'].values)
 
-        
-        
+
         tracks = torch.empty(0, dtype=torch.long)
         if(self.tracking):
             tracks = self.build_tracks(hits, particles, truth)
