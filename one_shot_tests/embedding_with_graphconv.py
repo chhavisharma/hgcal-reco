@@ -348,10 +348,10 @@ def plot_event(my_data,y_t):
     ax1.set_xlabel('Z-axis', fontweight ='bold')  
     ax1.set_ylabel('Y-axis', fontweight ='bold')  
     ax1.set_zlabel('X-axis', fontweight ='bold')  
-    ax1.scatter3D(z, y, x, s=10, color= m.to_rgba(y_t), edgecolors='b')      
+    ax1.scatter3D(z, y, x, s=10, color= m.to_rgba(y_t), edgecolors='black')      
 
     global ctr
-    plt.savefig('./plots/event_'+str(ctr)+'.pdf') 
+    plt.savefig(plot_path+'event_'+str(ctr)+'.pdf') 
     ctr = ctr+1
     ctr = ctr%10
     plt.close(fig)
@@ -360,9 +360,12 @@ def plot_event(my_data,y_t):
 if __name__ == "__main__" :
 
     root = '/home/csharma/prototyping/data/train_1/'
+    plot_folder_name = 'event1_epoch50_classes3'
+    plot_path       = './plots/'+plot_folder_name+'/'
+
     total_epochs = 50
     n_samples  = 1
-    input_classes = 3 
+    input_classes = 3
 
     input_dim  = 3
     hidden_dim = 32
@@ -374,6 +377,9 @@ if __name__ == "__main__" :
     conv_depth = 3
     k          = 8 
     edgecat_depth = 6 
+
+    
+
 
     '''Load Data'''
     data = load_data(root)
@@ -404,8 +410,8 @@ if __name__ == "__main__" :
     sep_loss_avg = []
     
     color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,10*n_samples))
-    marker_hits = ['^','v','s','h']#, 'o', 1, 2, 3, 4, 5 ,6, 7, 8, 9 ,10, 11]
-    marker_centers = ['+','1','x','3']
+    marker_hits =    ['^','v','s','h','<','>']
+    marker_centers = ['+','1','x','3','2','4']
 
     converged_embedding = False
     converged_categorizer = False
@@ -485,36 +491,39 @@ if __name__ == "__main__" :
             centers = scatter_mean(coords, d_gpu.y, dim=0, dim_size=(torch.max(d_gpu.y).item()+1))
             
             # if (make_plots==True and (epoch==0 or epoch==total_epochs-1) and (idata==0 or idata==n_samples-1)) :
-            if (make_plots==True) :
-                fig = plt.figure(figsize=(5,5))
+            if (make_plots==True and (epoch%10==0 or epoch==total_epochs-1)) :            
+            # if (make_plots==True) :
+
+                fig = plt.figure(figsize=(8,8))
                 if output_dim==3:
                     ax = fig.add_subplot(111, projection='3d')
                     for i in range(centers.size()[0]):  
                         ax.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                             coords[d_gpu.y == i,1].detach().cpu().numpy(),
                             coords[d_gpu.y == i,2].detach().cpu().numpy(),
-                            color=color_cycle[2*idata + i], marker = marker_hits[i%4], s=100);
+                            color=color_cycle[2*idata + i], marker = marker_hits[i%6], s=100);
 
                         ax.scatter(centers[i,0].detach().cpu().numpy(), 
                             centers[i,1].detach().cpu().numpy(), 
                             centers[i,2].detach().cpu().numpy(), 
-                            marker=marker_centers[i%4], color=color_cycle[2*idata+i], s=100); 
+                            marker=marker_centers[i%6], color=color_cycle[2*idata+i], s=100); 
                 elif output_dim==2:
                     for i in range(int(centers.size()[0])):
                             plt.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                                         coords[d_gpu.y == i,1].detach().cpu().numpy(),
                                         color=color_cycle[2*idata + i], 
-                                        marker = marker_hits[i%4] )
+                                        marker = marker_hits[i%6] )
 
 
                             plt.scatter(centers[i,0].detach().cpu().numpy(), 
                                         centers[i,1].detach().cpu().numpy(), 
                                         color=color_cycle[2*idata+i],  
-                                        marker=marker_centers[i%4]) 
+                                        edgecolors='black',
+                                        marker=marker_centers[i%6]) 
         
                 # display.clear_output(wait=True)
                 # display.display(plt.gcf())  
-                plt.savefig('./plots/train_plot_epoch_'+str(epoch)+'_ex_'+str(idata)+'.pdf')   
+                plt.savefig(plot_path+'train_plot_epoch_'+str(epoch)+'_ex_'+str(idata)+'.pdf')   
                 plt.close(fig)
 
             # Hinge: embedding distance based loss
@@ -581,7 +590,8 @@ if __name__ == "__main__" :
     plt.xlabel("Epochs")
     plt.ylabel("Losses")
     plt.legend()
-    plt.savefig('./plots/Learning_curve.pdf')
+    plt.title(plot_folder_name)
+    plt.savefig(plot_path + plot_folder_name+'_Learning_curve.pdf')
     plt.close(fig)
 
     print("Plot learned clusters")
@@ -595,9 +605,9 @@ if __name__ == "__main__" :
         z = data[0].x[data[0].y < input_classes][cluster_map == mapped_i,2].detach().cpu().numpy()
         ax.scatter(r*np.cos(phi), 
                 r*np.sin(phi),
-                color=color_cycle[2*idata + i], marker = marker_hits[i%4], s=100);
+                color=color_cycle[2*idata + i], marker = marker_hits[i%6], s=100);
         ax.text((r*np.cos(phi)).mean(), (r*np.sin(phi)).mean(), 'pt_pred = %.3f\npt_true = %.3f' % (1./cluster_props[mapped_i].item(), 1/y_properties[i]))
-    plt.savefig('./plots/learned_clusters.png')
+    plt.savefig(plot_path+'learned_clusters.pdf')
     plt.close(fig)
 
     print("UnionFind Roots:")
