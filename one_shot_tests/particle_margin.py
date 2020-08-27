@@ -108,7 +108,7 @@ class TrackMLParticleTrackingDataset(Dataset):
                  n_workers=mp.cpu_count(), n_tasks=1                #multiprocessing
                  ):
         events = glob.glob(osp.join(osp.join(root, 'raw'), 'event*-hits.csv'))
-        print('events found = ', len(events))
+        # print('events found = ', len(events))
         #pdb.set_trace()
         
         events = [e.split(osp.sep)[-1].split('-')[0][5:] for e in events]
