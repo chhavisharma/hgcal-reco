@@ -299,7 +299,7 @@ class SimpleEmbeddingNetwork(nn.Module):
         use the predicted graph to generate disjoint subgraphs
         these are our physics objects
         '''
-        objects =UnionFind(x.size()[0])
+        objects = UnionFind(x.size()[0])
         good_edges = edge_index[:,torch.argmax(edge_scores, dim=1) > 0]
         good_edges_cpu = good_edges.cpu().numpy() 
 
@@ -360,12 +360,13 @@ def plot_event(my_data,y_t):
 if __name__ == "__main__" :
 
     root = '/home/csharma/prototyping/data/train_1/'
-    plot_folder_name = 'event1_epoch50_classes3'
+    # plot_folder_name = 'event10_epoch2000_classes30'
+    plot_folder_name = 'event10_epoch1000_classes10'
     plot_path       = './plots/'+plot_folder_name+'/'
 
-    total_epochs = 50
-    n_samples  = 1
-    input_classes = 3
+    total_epochs = 1000
+    n_samples  = 10
+    input_classes = 10
 
     input_dim  = 3
     hidden_dim = 32
@@ -378,7 +379,10 @@ if __name__ == "__main__" :
     k          = 8 
     edgecat_depth = 6 
 
-    
+    # lr_threshold    = 1e-4
+    lr_threshold    = 5e-3
+    lr_threshold_2    = 1e-3
+
 
 
     '''Load Data'''
@@ -409,7 +413,7 @@ if __name__ == "__main__" :
     all_loss    = []
     sep_loss_avg = []
     
-    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,10*n_samples))
+    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,n_samples*k))
     marker_hits =    ['^','v','s','h','<','>']
     marker_centers = ['+','1','x','3','2','4']
 
@@ -435,22 +439,22 @@ if __name__ == "__main__" :
 
     for epoch in range(total_epochs):
         
-        sep_loss = np.zeros((total_epochs,3), dtype=np.float)
-        avg_loss_track = np.zeros(len(data), dtype=np.float)
+        sep_loss = np.zeros((n_samples,3), dtype=np.float)
+        avg_loss_track = np.zeros(n_samples, dtype=np.float)
         avg_loss = 0
         
         if make_plots:
             plt.clf()
 
         opt.zero_grad()
-        if opt.param_groups[0]['lr'] < 1e-4 and not converged_embedding:
+        if opt.param_groups[0]['lr'] < lr_threshold and not converged_embedding:
             converged_embedding = True
-            opt.param_groups[1]['lr'] = 1e-4
-            opt.param_groups[1]['lr'] = 1e-3
+            opt.param_groups[1]['lr'] = lr_threshold
+            opt.param_groups[1]['lr'] = lr_threshold_2
             
-        if opt.param_groups[1]['lr'] < 1e-4 and not converged_categorizer and converged_embedding:
+        if opt.param_groups[1]['lr'] < lr_threshold and not converged_categorizer and converged_embedding:
             converged_categorizer = True
-            opt.param_groups[2]['lr'] = 1e-3
+            opt.param_groups[2]['lr'] = lr_threshold_2
         
 
         for idata, d in enumerate(data[0:n_samples]):            
@@ -491,7 +495,7 @@ if __name__ == "__main__" :
             centers = scatter_mean(coords, d_gpu.y, dim=0, dim_size=(torch.max(d_gpu.y).item()+1))
             
             # if (make_plots==True and (epoch==0 or epoch==total_epochs-1) and (idata==0 or idata==n_samples-1)) :
-            if (make_plots==True and (epoch%10==0 or epoch==total_epochs-1)) :            
+            if (make_plots==True and (epoch%200==0 or epoch==total_epochs-1)) :            
             # if (make_plots==True) :
 
                 fig = plt.figure(figsize=(8,8))
@@ -501,28 +505,28 @@ if __name__ == "__main__" :
                         ax.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                             coords[d_gpu.y == i,1].detach().cpu().numpy(),
                             coords[d_gpu.y == i,2].detach().cpu().numpy(),
-                            color=color_cycle[2*idata + i], marker = marker_hits[i%6], s=100);
+                            color=color_cycle[(i*k)%(n_samples*k - 1)], marker = marker_hits[i%6], s=100);
 
                         ax.scatter(centers[i,0].detach().cpu().numpy(), 
                             centers[i,1].detach().cpu().numpy(), 
                             centers[i,2].detach().cpu().numpy(), 
-                            marker=marker_centers[i%6], color=color_cycle[2*idata+i], s=100); 
+                            marker=marker_centers[i%6], color=color_cycle[(i*k)%(n_samples*k - 1)], s=100); 
                 elif output_dim==2:
                     for i in range(int(centers.size()[0])):
                             plt.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                                         coords[d_gpu.y == i,1].detach().cpu().numpy(),
-                                        color=color_cycle[2*idata + i], 
+                                        color=color_cycle[(i*k)%(n_samples*k - 1)], 
                                         marker = marker_hits[i%6] )
-
 
                             plt.scatter(centers[i,0].detach().cpu().numpy(), 
                                         centers[i,1].detach().cpu().numpy(), 
-                                        color=color_cycle[2*idata+i],  
-                                        edgecolors='black',
+                                        color=color_cycle[(i*k)%(n_samples*k - 1)],  
+                                        edgecolors='b',
                                         marker=marker_centers[i%6]) 
         
                 # display.clear_output(wait=True)
                 # display.display(plt.gcf())  
+                plt.title('train_plot_epoch_'+str(epoch)+'_ex_'+str(idata))
                 plt.savefig(plot_path+'train_plot_epoch_'+str(epoch)+'_ex_'+str(idata)+'.pdf')   
                 plt.close(fig)
 
@@ -551,7 +555,10 @@ if __name__ == "__main__" :
 
             # Loss Backward
             loss.backward()
-            
+
+            # opt.step()
+            # sched.step(avg_loss)
+
             '''Per example stats'''
             # print(epoch, idata, 'loss / LR /centers -->>\n', 
             #     loss.item(), loss_ce.item(), loss_mse.item(), 
@@ -568,13 +575,16 @@ if __name__ == "__main__" :
         all_loss.append(avg_loss_track.mean())
         sep_loss_avg.append([sep_loss[:,0].mean(), sep_loss[:,1].mean(), sep_loss[:,2].mean()])
 
-        '''Per Epoch Stats'''
-        print("---------------------------------------------------------")
-        print("Epoch: {}\nLosses:\nCombined : {:.5e}\nHinge_distance : {:.5e}\nCrossEntr_Edges : {:.5e}\nMSE_centers : {:.5e}\n".format(
-                epoch,all_loss[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
-        print("LR: opt.param_groups \n[0] : {:.9e}  \n[1] : {:.9e}  \n[2] : {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
+        if(epoch%200==0 or epoch==total_epochs-1):
+            '''Per Epoch Stats'''
+            print('--------------------')
+            print("Epoch: {}\nLosses:\nCombined : {:.5e}\nHinge_distance : {:.5e}\nCrossEntr_Edges : {:.5e}\nMSE_centers : {:.5e}\n".format(
+                    epoch,all_loss[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+            print("LR: opt.param_groups \n[0] : {:.9e}  \n[1] : {:.9e}  \n[2] : {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
+            
         opt.step()
         sched.step(avg_loss)
+
 
     print("Training Complted!")
     print(1/y_properties)
@@ -582,15 +592,24 @@ if __name__ == "__main__" :
     print(1/cluster_props[pred_cluster_match].squeeze())
     
     '''Plot Learning Curve'''
-    fig = plt.figure(figsize=(15,10))
-    plt.plot(np.arange(total_epochs), [x[0] for x in sep_loss_avg], color='brown', linewidth=1, label="Hinge")
-    plt.plot(np.arange(total_epochs), [x[1] for x in sep_loss_avg], color='green', linewidth=1, label="CrossEntropy")
-    plt.plot(np.arange(total_epochs), [x[2] for x in sep_loss_avg], color='olive', linewidth=1, label="MSE")
-    plt.plot(np.arange(total_epochs), all_loss, color='red', linewidth=2, label="Combined")
-    plt.xlabel("Epochs")
-    plt.ylabel("Losses")
-    plt.legend()
+    fig = plt.figure(figsize=(20,10))
+    ax1 = fig.add_subplot(121)
+    ax1.plot(np.arange(total_epochs), [x[0] for x in sep_loss_avg], color='brown', linewidth=1, label="Hinge")
+    ax1.plot(np.arange(total_epochs), [x[1] for x in sep_loss_avg], color='green', linewidth=1, label="CrossEntropy")
+    ax1.plot(np.arange(total_epochs), [x[2] for x in sep_loss_avg], color='olive', linewidth=1, label="MSE")
+    ax1.set_xlabel("Epochs")
+    ax1.set_ylabel("Losses")
+    ax1.legend()
+
+    ax2 = fig.add_subplot(122)
+    ax2.plot(np.arange(total_epochs), all_loss, color='red', linewidth=2, label="Combined")
+    ax2.set_xlabel("Epochs")
+    ax2.set_ylabel("Losses")
+    ax2.legend()
+
     plt.title(plot_folder_name)
+    ax1.set_title(plot_folder_name+': indivudual losses')
+    ax2.set_title(plot_folder_name+': combined loss')
     plt.savefig(plot_path + plot_folder_name+'_Learning_curve.pdf')
     plt.close(fig)
 
