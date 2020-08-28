@@ -12,6 +12,7 @@ import matplotlib.cm as cm
 
 # from IPython import display
 import time
+from timeit import default_timer as timer
 #https://github.com/eldridgejm/unionfind
 from unionfind import UnionFind
 import pdb 
@@ -122,7 +123,7 @@ def match_cluster_targets(clusters, truth_clusters, data):
         thebc = torch.unique(data.y_particle_barcodes[data.y == label]).item()
         select_truth = (data.truth_barcodes == thebc)
         true_cluster_properties.append(1./data.truth_pt[select_truth])
-        #[data.truth_eta[select_truth], data.truth_phi[select_truth]]
+        #[data.truth_eta[select_truth], data.truth_phi[select_truth]] ### TRY_THIS ETA+PHI
     matched_pred_clusters = np.array(matched_pred_clusters, dtype=np.int64)
     pred_indices = torch.from_numpy(matched_pred_clusters).to(clusters.device)
     #print(pred_indices)
@@ -132,7 +133,7 @@ def match_cluster_targets(clusters, truth_clusters, data):
     # print(y_properties)    
     
     #print('match_cluster_targets')
-    return pred_indices, y_properties
+    return pred_indices, y_properties ## Also predict Eta-Phi
 
 class SimpleEmbeddingNetwork(nn.Module):
     def __init__(self, input_dim=5, hidden_dim=16, ncats_out=2, nprops_out=1, output_dim=8,
@@ -360,13 +361,12 @@ def plot_event(my_data,y_t):
 if __name__ == "__main__" :
 
     root = '/home/csharma/prototyping/data/train_1/'
-    # plot_folder_name = 'event10_epoch2000_classes30'
-    plot_folder_name = 'event10_epoch1000_classes10'
-    plot_path       = './plots/'+plot_folder_name+'/'
+    plot_folder_name = 'event10_epoch2000_classes15'
+    plot_path        = './plots/'+plot_folder_name+'/'
 
-    total_epochs = 1000
+    total_epochs = 2000
     n_samples  = 10
-    input_classes = 10
+    input_classes = 15
 
     input_dim  = 3
     hidden_dim = 32
@@ -377,13 +377,12 @@ if __name__ == "__main__" :
     
     conv_depth = 3
     k          = 8 
-    edgecat_depth = 6 
+    edgecat_depth = 6 # TRY DEPTH==3
+    make_plots   = True
 
     # lr_threshold    = 1e-4
-    lr_threshold    = 5e-3
-    lr_threshold_2    = 1e-3
-
-
+    lr_threshold_1    = 1e-4 #5e-3
+    lr_threshold_2    = 5e-4 #1e-3
 
     '''Load Data'''
     data = load_data(root)
@@ -406,11 +405,11 @@ if __name__ == "__main__" :
                             {'params': list(model.inputnet_cat.parameters()) + list(model.edgecatconvs.parameters()) + list(model.edge_classifier.parameters()), 'lr': 0.0},
                             {'params': list(model.inputnet_prop.parameters()) + list(model.propertyconvs.parameters()) + list(model.property_predictor.parameters()), 'lr': 0.0}
                             ], lr=2.5e-3, weight_decay=1e-3)
-    sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.65, patience=30)
+    sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.70, patience=30)
     # sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, 20, eta_min=0)
 
-    truth_cache = []
-    all_loss    = []
+    truth_cache  = []
+    all_loss     = []
     sep_loss_avg = []
     
     color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,n_samples*k))
@@ -419,7 +418,6 @@ if __name__ == "__main__" :
 
     converged_embedding = False
     converged_categorizer = False
-    make_plots = True
 
     print('-------------------')
     print('Root      : ',root)
@@ -432,27 +430,32 @@ if __name__ == "__main__" :
     print('OutputDim : ',output_dim)
 
     print('Model Parameters (trainable):',  sum(p.numel() for p in model.parameters() if p.requires_grad))
-    # pdb.set_trace()
+    
 
     print('--------------------')
     print('Begin training :')
+    print('Plot ? ',make_plots)
 
+    t1 = timer()
     for epoch in range(total_epochs):
         
+        '''book-keeping'''
         sep_loss = np.zeros((n_samples,3), dtype=np.float)
         avg_loss_track = np.zeros(n_samples, dtype=np.float)
+        edge_acc_track = np.zeros(n_samples, dtype=np.float)
+
         avg_loss = 0
         
         if make_plots:
             plt.clf()
 
         opt.zero_grad()
-        if opt.param_groups[0]['lr'] < lr_threshold and not converged_embedding:
+        if opt.param_groups[0]['lr'] < lr_threshold_1 and not converged_embedding:
             converged_embedding = True
-            opt.param_groups[1]['lr'] = lr_threshold
+            opt.param_groups[1]['lr'] = lr_threshold_1
             opt.param_groups[1]['lr'] = lr_threshold_2
             
-        if opt.param_groups[1]['lr'] < lr_threshold and not converged_categorizer and converged_embedding:
+        if opt.param_groups[1]['lr'] < lr_threshold_1 and not converged_categorizer and converged_embedding:
             converged_categorizer = True
             opt.param_groups[2]['lr'] = lr_threshold_2
         
@@ -494,10 +497,40 @@ if __name__ == "__main__" :
             # print('predicted centers in latent space - for plotting')
             centers = scatter_mean(coords, d_gpu.y, dim=0, dim_size=(torch.max(d_gpu.y).item()+1))
             
-            # if (make_plots==True and (epoch==0 or epoch==total_epochs-1) and (idata==0 or idata==n_samples-1)) :
-            if (make_plots==True and (epoch%200==0 or epoch==total_epochs-1)) :            
-            # if (make_plots==True) :
+            '''Compute Losses'''
+            # Hinge: embedding distance based loss
+            hinges = torch.cat([F.hinge_embedding_loss(dis**2, y, margin=1.0, reduction='mean')[None] 
+                                for dis, y in multi_simple_hinge],dim=0)
+            
+            # Cross Entropy: Edge categories loss
+            y_edgecat = (d_gpu.y[edges[0]] == d_gpu.y[edges[1]]).long()
+            loss_ce = F.cross_entropy(edge_scores, y_edgecat, reduction='mean')
+            
+            # MSE: Cluster loss
+            pred_cluster_match, y_properties = match_cluster_targets(cluster_map, d_gpu.y, d_gpu)
+            loss_mse = F.mse_loss(cluster_props[pred_cluster_match].squeeze(), y_properties, reduction='mean')
+            
+            # Combined loss
+            loss = hinges.mean() + loss_ce + loss_mse
+            avg_loss_track[idata] = loss.item()
+            
+            avg_loss += loss.item()
 
+
+            '''Track Losses and Acuracies'''   
+            sep_loss[idata,0]= hinges.mean().detach().cpu().numpy()
+            sep_loss[idata,1]= loss_ce.detach().cpu().numpy()
+            sep_loss[idata,2]= loss_mse.detach().cpu().numpy()
+
+            true_edges = y_edgecat.sum().item()
+            edge_accuracy = (torch.argmax(edge_scores, dim=1) == y_edgecat).sum().item() / (y_edgecat.size()[0])
+            edge_acc_track[idata] = edge_accuracy
+
+
+            '''Plot'''
+            if (make_plots==True and (epoch==0 or epoch==total_epochs-1)) :            
+            # if (make_plots==True and (epoch==0 or epoch==total_epochs-1) and (idata==0 or idata==n_samples-1)) :
+            # if (make_plots==True) :
                 fig = plt.figure(figsize=(8,8))
                 if output_dim==3:
                     ax = fig.add_subplot(111, projection='3d')
@@ -526,33 +559,12 @@ if __name__ == "__main__" :
         
                 # display.clear_output(wait=True)
                 # display.display(plt.gcf())  
-                plt.title('train_plot_epoch_'+str(epoch)+'_ex_'+str(idata))
+                plt.title('train_plot_epoch_'+str(epoch)+'_ex_'+str(idata)+'_EdgeAcc_'+str('{:.5e}'.format(edge_accuracy)))
                 plt.savefig(plot_path+'train_plot_epoch_'+str(epoch)+'_ex_'+str(idata)+'.pdf')   
                 plt.close(fig)
 
-            # Hinge: embedding distance based loss
-            hinges = torch.cat([F.hinge_embedding_loss(dis**2, y, margin=1.0, reduction='mean')[None] 
-                                for dis, y in multi_simple_hinge],
-                            dim=0)
-            
-            # Cross Entropy: Edge categories loss
-            y_edgecat = (d_gpu.y[edges[0]] == d_gpu.y[edges[1]]).long()
-            loss_ce = F.cross_entropy(edge_scores, y_edgecat, reduction='mean')
-            
-            # MSE: Cluster loss
-            pred_cluster_match, y_properties = match_cluster_targets(cluster_map, d_gpu.y, d_gpu)
-            loss_mse = F.mse_loss(cluster_props[pred_cluster_match].squeeze(), y_properties, reduction='mean')
-            
-            # Combined loss
-            loss = hinges.mean() + loss_ce + loss_mse
-            avg_loss_track[idata] = loss.item()
-            
-            avg_loss += loss.item()
 
-            sep_loss[idata,0]= hinges.mean().detach().cpu().numpy()
-            sep_loss[idata,1]= loss_ce.detach().cpu().numpy()
-            sep_loss[idata,2]= loss_mse.detach().cpu().numpy()
-
+            '''Loss Backward'''
             # Loss Backward
             loss.backward()
 
@@ -575,59 +587,71 @@ if __name__ == "__main__" :
         all_loss.append(avg_loss_track.mean())
         sep_loss_avg.append([sep_loss[:,0].mean(), sep_loss[:,1].mean(), sep_loss[:,2].mean()])
 
-        if(epoch%200==0 or epoch==total_epochs-1):
+        if(epoch%100==0 or epoch==total_epochs-1):
             '''Per Epoch Stats'''
             print('--------------------')
             print("Epoch: {}\nLosses:\nCombined : {:.5e}\nHinge_distance : {:.5e}\nCrossEntr_Edges : {:.5e}\nMSE_centers : {:.5e}\n".format(
                     epoch,all_loss[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
             print("LR: opt.param_groups \n[0] : {:.9e}  \n[1] : {:.9e}  \n[2] : {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
-            
+            print("Average Edge Accuracies over {} events: {:.5e}".format(n_samples,edge_acc_track.mean()) )
+        
+        
+        '''Update Weights'''
         opt.step()
         sched.step(avg_loss)
 
+    t2 = timer()
 
-    print("Training Complted!")
-    print(1/y_properties)
-    print(pred_cluster_match)
-    print(1/cluster_props[pred_cluster_match].squeeze())
+    print("Training Complted in {:.5f}s.".format(t2-t1))
+
+    print('1/properties: ',1/y_properties)
+    print('pred cluster matches: ',pred_cluster_match)
+    print('1/cluster_prop[cluster_match]: ',1/cluster_props[pred_cluster_match].squeeze())
     
-    '''Plot Learning Curve'''
-    fig = plt.figure(figsize=(20,10))
-    ax1 = fig.add_subplot(121)
-    ax1.plot(np.arange(total_epochs), [x[0] for x in sep_loss_avg], color='brown', linewidth=1, label="Hinge")
-    ax1.plot(np.arange(total_epochs), [x[1] for x in sep_loss_avg], color='green', linewidth=1, label="CrossEntropy")
-    ax1.plot(np.arange(total_epochs), [x[2] for x in sep_loss_avg], color='olive', linewidth=1, label="MSE")
-    ax1.set_xlabel("Epochs")
-    ax1.set_ylabel("Losses")
-    ax1.legend()
 
-    ax2 = fig.add_subplot(122)
-    ax2.plot(np.arange(total_epochs), all_loss, color='red', linewidth=2, label="Combined")
-    ax2.set_xlabel("Epochs")
-    ax2.set_ylabel("Losses")
-    ax2.legend()
+    '''Learning Curve / Clusters / Centers'''
+    
+    if(make_plots==True):
 
-    plt.title(plot_folder_name)
-    ax1.set_title(plot_folder_name+': indivudual losses')
-    ax2.set_title(plot_folder_name+': combined loss')
-    plt.savefig(plot_path + plot_folder_name+'_Learning_curve.pdf')
-    plt.close(fig)
+        '''Plot Learning Curve'''
+        fig = plt.figure(figsize=(20,10))
+        ax1 = fig.add_subplot(121)
+        ax1.plot(np.arange(total_epochs), [x[0] for x in sep_loss_avg], color='brown', linewidth=1, label="Hinge")
+        ax1.plot(np.arange(total_epochs), [x[1] for x in sep_loss_avg], color='green', linewidth=1, label="CrossEntropy")
+        ax1.plot(np.arange(total_epochs), [x[2] for x in sep_loss_avg], color='olive', linewidth=1, label="MSE")
+        ax1.set_xlabel("Epochs")
+        ax1.set_ylabel("Losses")
+        ax1.legend()
 
-    print("Plot learned clusters")
-    pdb.set_trace()
-    n_clusters = data[0].y[data[0].y < input_classes].max().item() + 1
-    fig, ax = plt.subplots()
-    for i in range(n_clusters):
-        mapped_i = pred_cluster_match[i].item()
-        r = data[0].x[data[0].y < input_classes][cluster_map == mapped_i,0].detach().cpu().numpy()
-        phi = data[0].x[data[0].y < input_classes][cluster_map == mapped_i,1].detach().cpu().numpy()
-        z = data[0].x[data[0].y < input_classes][cluster_map == mapped_i,2].detach().cpu().numpy()
-        ax.scatter(r*np.cos(phi), 
-                r*np.sin(phi),
-                color=color_cycle[2*idata + i], marker = marker_hits[i%6], s=100);
-        ax.text((r*np.cos(phi)).mean(), (r*np.sin(phi)).mean(), 'pt_pred = %.3f\npt_true = %.3f' % (1./cluster_props[mapped_i].item(), 1/y_properties[i]))
-    plt.savefig(plot_path+'learned_clusters.pdf')
-    plt.close(fig)
+        ax2 = fig.add_subplot(122)
+        ax2.plot(np.arange(total_epochs), all_loss, color='red', linewidth=2, label="Combined")
+        ax2.set_xlabel("Epochs")
+        ax2.set_ylabel("Losses")
+        ax2.legend()
+
+        plt.title(plot_folder_name)
+        ax1.set_title(plot_folder_name+': indivudual losses')
+        ax2.set_title(plot_folder_name+': combined loss')
+        plt.savefig(plot_path + plot_folder_name+'_Learning_curve.pdf')
+        plt.close(fig)
+
+        print("Plot learned clusters")
+        n_clusters = data[0].y[data[0].y < input_classes].max().item() + 1
+        print("Number of clusters : ", n_clusters)
+
+        pdb.set_trace()
+        fig, ax = plt.subplots()
+        for i in range(n_clusters):
+            mapped_i = pred_cluster_match[i].item()
+            r = data[0].x[data[0].y < input_classes][cluster_map == mapped_i,0].detach().cpu().numpy()
+            phi = data[0].x[data[0].y < input_classes][cluster_map == mapped_i,1].detach().cpu().numpy()
+            z = data[0].x[data[0].y < input_classes][cluster_map == mapped_i,2].detach().cpu().numpy()
+            ax.scatter(r*np.cos(phi), 
+                    r*np.sin(phi),
+                    color=color_cycle[2*idata + i], marker = marker_hits[i%6], s=100);
+            ax.text((r*np.cos(phi)).mean(), (r*np.sin(phi)).mean(), 'pt_pred = %.3f\npt_true = %.3f' % (1./cluster_props[mapped_i].item(), 1/y_properties[i]))
+        plt.savefig(plot_path+'learned_clusters.pdf')
+        plt.close(fig)
 
     print("UnionFind Roots:")
     objects = UnionFind(coords.size()[0])
@@ -637,4 +661,4 @@ if __name__ == "__main__" :
         #objects.union(edge[1],edge[0])
     roots = np.array([objects.find(i) for i in range(coords.size()[0])], dtype=np.int64)
     print(roots)
-    print('exit')
+    print('Finish.')
