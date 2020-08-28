@@ -1,21 +1,22 @@
 from itertools import product
-
 import argparse
 from datasets import get_dataset
 from train_eval import cross_validation_with_val_set
 
-from gcn import GCN, GCNWithJK
-from graph_sage import GraphSAGE, GraphSAGEWithJK
-from gin import GIN0, GIN0WithJK, GIN, GINWithJK
-from graclus import Graclus
-from top_k import TopK
-from sag_pool import SAGPool
-from diff_pool import DiffPool
-from edge_pool import EdgePool
-from global_attention import GlobalAttentionNet
-from set2set import Set2SetNet
-from sort_pool import SortPool
+# from gcn import GCN, GCNWithJK
+# from graph_sage import GraphSAGE, GraphSAGEWithJK
+# from gin import GIN0, GIN0WithJK, GIN, GINWithJK
+# from graclus import Graclus
+# from top_k import TopK
+# from sag_pool import SAGPool
+# from diff_pool import DiffPool
+# from edge_pool import EdgePool
+# from global_attention import GlobalAttentionNet
+# from set2set import Set2SetNet
+# from sort_pool import SortPool
 from asap import ASAP
+
+import pdb
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs', type=int, default=100)
@@ -25,26 +26,30 @@ parser.add_argument('--lr_decay_factor', type=float, default=0.5)
 parser.add_argument('--lr_decay_step_size', type=int, default=50)
 args = parser.parse_args()
 
-layers = [1, 2, 3, 4, 5]
-hiddens = [16, 32, 64, 128]
-datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']  # , 'COLLAB']
+# layers = [1, 2, 3, 4, 5]
+# hiddens = [16, 32, 64, 128]
+# datasets = ['MUTAG', 'PROTEINS', 'IMDB-BINARY', 'REDDIT-BINARY']  # , 'COLLAB']
+layers = [4]
+hiddens = [64]
+datasets = ['PROTEINS'] 
+
 nets = [
-    GCNWithJK,
-    GraphSAGEWithJK,
-    GIN0WithJK,
-    GINWithJK,
-    Graclus,
-    TopK,
-    SAGPool,
-    DiffPool,
-    EdgePool,
-    GCN,
-    GraphSAGE,
-    GIN0,
-    GIN,
-    GlobalAttentionNet,
-    Set2SetNet,
-    SortPool,
+    # GCNWithJK,
+    # GraphSAGEWithJK,
+    # GIN0WithJK,
+    # GINWithJK,
+    # Graclus,
+    # TopK,
+    # SAGPool,
+    # DiffPool,
+    # EdgePool,
+    # GCN,
+    # GraphSAGE,
+    # GIN0,
+    # GIN,
+    # GlobalAttentionNet,
+    # Set2SetNet,
+    # SortPool,
     ASAP,
 ]
 
@@ -55,14 +60,36 @@ def logger(info):
     print('{:02d}/{:03d}: Val Loss: {:.4f}, Test Accuracy: {:.3f}'.format(
         fold, epoch, val_loss, test_acc))
 
-
 results = []
-for dataset_name, Net in product(datasets, nets):
+
+for dataset_name, Net in product(datasets, nets): 
+# over a list of net definitions 
+    
     best_result = (float('inf'), 0, 0)  # (loss, acc, std)
     print('-----\n{} - {}'.format(dataset_name, Net.__name__))
-    for num_layers, hidden in product(layers, hiddens):
-        dataset = get_dataset(dataset_name, sparse=Net != DiffPool)
+    
+    for num_layers, hidden in product(layers, hiddens): 
+    # over a number of diffent sizes of this net 
+
+        # dataset = get_dataset(dataset_name, sparse=Net != DiffPool)
+        dataset = get_dataset(dataset_name, sparse=Net)
+
+        print(' Dataset  :', dataset_name)
+        print(' features :', dataset.num_features)
+        print(' classes  :', dataset.num_classes)
+
+        print(' NumLayers:', num_layers)
+        print(' HiddenDim:', hidden)
+
         model = Net(dataset, num_layers, hidden)
+        
+        print(' Model     :\n', model)
+        for name, param in model.named_parameters():    
+            print(name, param.shape)
+
+
+
+        # pdb.set_trace()
         loss, acc, std = cross_validation_with_val_set(
             dataset,
             model,

@@ -7,6 +7,10 @@ from torch.optim import Adam
 from sklearn.model_selection import StratifiedKFold
 from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
 
+
+import tqdm
+import pdb
+
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
 
@@ -106,11 +110,15 @@ def num_graphs(data):
 
 def train(model, optimizer, loader):
     model.train()
-
+    print("In Trainer")
     total_loss = 0
-    for data in loader:
+    for data in tqdm.tqdm(loader):      
         optimizer.zero_grad()
         data = data.to(device)
+        
+        # pdb.set_trace()
+        # print(data)
+
         out = model(data)
         loss = F.nll_loss(out, data.y.view(-1))
         loss.backward()

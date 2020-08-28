@@ -1,13 +1,15 @@
 '''PYTHON'''
+import numpy as np
+import time
+from tqdm import tqdm
+import argparse
+import pdb
+import glob
+import math
+import os
 from sklearn.model_selection import StratifiedKFold
 from itertools import product
 import os.path as osp
-import numpy as np
-import time
-import tqdm
-import argparse
-import pdb
-import math
 
 '''TORCH'''
 import torch
@@ -20,9 +22,15 @@ from torch.optim import Adam
 import torch_geometric.transforms as T
 from torch_geometric.nn import (ASAPooling, GraphConv, global_mean_pool,
                                 JumpingKnowledge, TopKPooling)
+from torch.utils.data import random_split
+from torch_geometric.utils import is_undirected, to_undirected
+from torch_geometric.data import (Data, Dataset)
 from torch_geometric.datasets import TUDataset
 from torch_geometric.utils import degree
 from torch_geometric.data import DataLoader, DenseDataLoader as DenseLoader
+
+'''Local'''
+from graph import load_graph
 
 device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
@@ -44,99 +52,136 @@ class NormalizedDegree(object):
         return data
 
 def get_dataset(name, sparse=True, cleaned=False):
-    path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', name)
-    dataset = TUDataset(path, name, cleaned=cleaned)
-    dataset.data.edge_attr = None
+    
+    if name=='node':
+        path = osp.join(os.environ['GNN_TRAINING_DATA_ROOT'], name)
+        print(path)
+        dataset = HitGraphDataset2(path, directed=False, categorical=True)
+    else:       
+        path = osp.join(osp.dirname(osp.realpath(__file__)), '..', 'data', name)
+        dataset = TUDataset(path, name, cleaned=cleaned)
+        dataset.data.edge_attr = None
 
-    if dataset.data.x is None:
-        max_degree = 0
-        degs = []
-        for data in dataset:
-            degs += [degree(data.edge_index[0], dtype=torch.long)]
-            max_degree = max(max_degree, degs[-1].max().item())
+        if dataset.data.x is None:
+            max_degree = 0
+            degs = []
+            for data in dataset:
+                degs += [degree(data.edge_index[0], dtype=torch.long)]
+                max_degree = max(max_degree, degs[-1].max().item())
 
-        if max_degree < 1000:
-            dataset.transform = T.OneHotDegree(max_degree)
-        else:
-            deg = torch.cat(degs, dim=0).to(torch.float)
-            mean, std = deg.mean().item(), deg.std().item()
-            dataset.transform = NormalizedDegree(mean, std)
+            if max_degree < 1000:
+                dataset.transform = T.OneHotDegree(max_degree)
+            else:
+                deg = torch.cat(degs, dim=0).to(torch.float)
+                mean, std = deg.mean().item(), deg.std().item()
+                dataset.transform = NormalizedDegree(mean, std)
 
-    if not sparse:
-        num_nodes = max_num_nodes = 0
-        for data in dataset:
-            num_nodes += data.num_nodes
-            max_num_nodes = max(data.num_nodes, max_num_nodes)
+        if not sparse:
+            num_nodes = max_num_nodes = 0
+            for data in dataset:
+                num_nodes += data.num_nodes
+                max_num_nodes = max(data.num_nodes, max_num_nodes)
 
-        # Filter out a few really large graphs in order to apply DiffPool.
-        if name == 'REDDIT-BINARY':
-            num_nodes = min(int(num_nodes / len(dataset) * 1.5), max_num_nodes)
-        else:
-            num_nodes = min(int(num_nodes / len(dataset) * 5), max_num_nodes)
+            # Filter out a few really large graphs in order to apply DiffPool.
+            if name == 'REDDIT-BINARY':
+                num_nodes = min(int(num_nodes / len(dataset) * 1.5), max_num_nodes)
+            else:
+                num_nodes = min(int(num_nodes / len(dataset) * 5), max_num_nodes)
 
-        indices = []
-        for i, data in enumerate(dataset):
-            if data.num_nodes <= num_nodes:
-                indices.append(i)
-        dataset = dataset[torch.tensor(indices)]
+            indices = []
+            for i, data in enumerate(dataset):
+                if data.num_nodes <= num_nodes:
+                    indices.append(i)
+            dataset = dataset[torch.tensor(indices)]
 
-        if dataset.transform is None:
-            dataset.transform = T.ToDense(num_nodes)
-        else:
-            dataset.transform = T.Compose(
-                [dataset.transform, T.ToDense(num_nodes)])
-
+            if dataset.transform is None:
+                dataset.transform = T.ToDense(num_nodes)
+            else:
+                dataset.transform = T.Compose(
+                    [dataset.transform, T.ToDense(num_nodes)])
+    
     return dataset
 
-class ASAP(torch.nn.Module):
-    def __init__(self, dataset, num_layers, hidden, ratio=0.8, dropout=0):
-        super(ASAP, self).__init__()
-        self.conv1 = GraphConv(dataset.num_features, hidden, aggr='mean')
-        self.convs = torch.nn.ModuleList()
-        self.pools = torch.nn.ModuleList()
-        self.convs.extend([
-            GraphConv(hidden, hidden, aggr='mean')
-            for i in range(num_layers - 1)
-        ])
-        self.pools.extend([
-            ASAPooling(hidden, ratio, dropout=dropout)
-            for i in range((num_layers) // 2)
-        ])
-        self.jump = JumpingKnowledge(mode='cat')
-        self.lin1 = Linear(num_layers * hidden, hidden)
-        self.lin2 = Linear(hidden, dataset.num_classes)
+class HitGraphDataset2(Dataset):
+    """PyTorch geometric dataset from processed hit information"""
+    
+    def __init__(self, root,
+                 directed = True,
+                 categorical = False,
+                 transform = None,
+                 pre_transform = None):
+        self._directed = directed
+        self._categorical = categorical
+        super(HitGraphDataset2, self).__init__(root, transform, pre_transform)
+    
+    @property
+    def raw_file_names(self):
+        if not hasattr(self,'input_files'):
+            self.input_files = glob.glob(self.raw_dir+'/*.npz')
+        return [f.split('/')[-1] for f in self.input_files]
+    
+    @property
+    def processed_file_names(self):
+        if not hasattr(self,'processed_files'):
+            proc_names = ['data_{}.pt'.format(idx) for idx in range(len(self.raw_file_names))]
+            self.processed_files = [osp.join(self.processed_dir,name) for name in proc_names]
+        return self.processed_files
+    
+    def __len__(self):
+        return len(self.processed_file_names)
+    
+    def get(self, idx):
+        data = torch.load(self.processed_files[idx])
+        return data
+    
+    def process(self):
+        #convert the npz into pytorch tensors and save them
+        path = self.processed_dir
+        for idx,raw_path in enumerate(tqdm(self.raw_paths)):
 
-    def reset_parameters(self):
-        self.conv1.reset_parameters()
-        for conv in self.convs:
-            conv.reset_parameters()
-        for pool in self.pools:
-            pool.reset_parameters()
-        self.lin1.reset_parameters()
-        self.lin2.reset_parameters()
+            g = load_graph(raw_path)
+            
+            Ro = g.Ro[0].T.astype(np.int64)
+            Ri = g.Ri[0].T.astype(np.int64)
+            
+            i_out = Ro[Ro[:,1].argsort(kind='stable')][:,0]
+            i_in  = Ri[Ri[:,1].argsort(kind='stable')][:,0]
+                        
+            x = g.X.astype(np.float32)
+            edge_index = np.stack((i_out,i_in))
+            y = g.y.astype(np.int64)
 
-    def forward(self, data):
-        x, edge_index, batch = data.x, data.edge_index, data.batch
-        edge_weight = None
-        x = F.relu(self.conv1(x, edge_index))
-        xs = [global_mean_pool(x, batch)]
-        for i, conv in enumerate(self.convs):
-            x = conv(x=x, edge_index=edge_index, edge_weight=edge_weight)
-            x = F.relu(x)
-            xs += [global_mean_pool(x, batch)]
-            if i % 2 == 0 and i < len(self.convs) - 1:
-                pool = self.pools[i // 2]
-                x, edge_index, edge_weight, batch, _ = pool(
-                    x=x, edge_index=edge_index, edge_weight=edge_weight,
-                    batch=batch)
-        x = self.jump(xs)
-        x = F.relu(self.lin1(x))
-        x = F.dropout(x, p=0.5, training=self.training)
-        x = self.lin2(x)
-        return F.log_softmax(x, dim=-1)
+            y_nodes = np.zeros(x.shape[0])
+            categories = np.unique(y)
 
-    def __repr__(self):
-        return self.__class__.__name__
+            if not self._categorical:
+                y = g.y.astype(np.float32)
+            #print('y type',y.dtype)
+
+            for i_category in categories:
+                # Get all the edges belonging to this category
+                indices_edges_this_category = (y == i_category)
+                # Get all the nodes belonging to this category
+                # (Use both ingoing and outgoing)
+                node_indices_this_category = np.unique(np.concatenate((
+                    edge_index[0][indices_edges_this_category],
+                    edge_index[1][indices_edges_this_category]
+                    )))
+                # Set the y value to the category
+                y_nodes[node_indices_this_category] = i_category
+
+            outdata = Data(x=torch.from_numpy(x),
+                           edge_index=torch.from_numpy(edge_index),
+                           y=torch.from_numpy(y))
+            outdata.y_nodes = torch.from_numpy(y_nodes.astype(np.int64))                           
+            
+            if not self._directed and not outdata.is_undirected():
+                rows,cols = outdata.edge_index
+                temp = torch.stack((cols,rows))
+                outdata.edge_index = torch.cat([outdata.edge_index,temp],dim=-1)
+                outdata.y = torch.cat([outdata.y,outdata.y])
+        
+            torch.save(outdata, osp.join(self.processed_dir, 'data_{}.pt'.format(idx)))
 
 def fixed_train_val_set(dataset, model, folds, epochs, batch_size,
                                   lr, lr_decay_factor, lr_decay_step_size,
@@ -150,7 +195,7 @@ def fixed_train_val_set(dataset, model, folds, epochs, batch_size,
     splits = np.cumsum([fulllen-tv_num,0,tv_num])
     splits = splits.astype(np.int32)
     print('fulllen:', fulllen,' splits:', splits)
-    # pdb.set_trace()  
+   
 
     train_dataset = torch.utils.data.Subset(dataset,np.arange(start=0,stop=splits[0]).tolist() )
     valid_dataset = torch.utils.data.Subset(dataset,np.arange(start=splits[1],stop=splits[2]).tolist() )
@@ -173,6 +218,7 @@ def fixed_train_val_set(dataset, model, folds, epochs, batch_size,
     # val_loader = DataLoader(val_dataset, batch_size, shuffle=False)
     # test_loader = DataLoader(test_dataset, batch_size, shuffle=False)
 
+   
     model.to(device).reset_parameters()
     optimizer = Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
 
@@ -225,6 +271,7 @@ def fixed_train_val_set(dataset, model, folds, epochs, batch_size,
 
     return loss_mean, acc_mean, acc_std
 
+'''
 def cross_validation_with_val_set(dataset, model, folds, epochs, batch_size,
                                   lr, lr_decay_factor, lr_decay_step_size,
                                   weight_decay, logger=None):
@@ -314,11 +361,65 @@ def k_fold(dataset, folds):
 
     return train_indices, test_indices, val_indices
 
+'''
+
 def num_graphs(data):
     if data.batch is not None:
         return data.num_graphs
     else:
         return data.x.size(0)
+
+class ASAP(torch.nn.Module):
+    def __init__(self, num_classes, num_features, num_layers, hidden, ratio=0.8, dropout=0):
+        super(ASAP, self).__init__()
+        self.conv1 = GraphConv(num_features, hidden, aggr='mean')
+        self.convs = torch.nn.ModuleList()
+        self.pools = torch.nn.ModuleList()
+        self.convs.extend([
+            GraphConv(hidden, hidden, aggr='mean')
+            for i in range(num_layers - 1)
+        ])
+        self.pools.extend([
+            ASAPooling(hidden, ratio, dropout=dropout)
+            for i in range((num_layers) // 2)
+        ])
+        self.jump = JumpingKnowledge(mode='cat')
+        self.lin1 = Linear(num_layers * hidden, hidden)
+        self.lin2 = Linear(hidden, num_classes)
+
+    def reset_parameters(self):
+        self.conv1.reset_parameters()
+        for conv in self.convs:
+            conv.reset_parameters()
+        for pool in self.pools:
+            pool.reset_parameters()
+        self.lin1.reset_parameters()
+        self.lin2.reset_parameters()
+
+    def forward(self, data):
+        x, edge_index, batch = data.x, data.edge_index, data.batch
+        edge_weight = None
+        x = F.relu(self.conv1(x, edge_index))
+        xs = [global_mean_pool(x, batch)]
+        for i, conv in enumerate(self.convs):
+            x = conv(x=x, edge_index=edge_index, edge_weight=edge_weight)
+            x = F.relu(x)
+            xs += [global_mean_pool(x, batch)]
+            if i % 2 == 0 and i < len(self.convs) - 1:
+                pool = self.pools[i // 2]
+                x, edge_index, edge_weight, batch, _ = pool(
+                    x=x, edge_index=edge_index, edge_weight=edge_weight,
+                    batch=batch)
+
+        x = self.jump(xs)
+        x = F.relu(self.lin1(x))
+        x = F.dropout(x, p=0.5, training=self.training)
+        x = self.lin2(x)
+        return F.log_softmax(x, dim=-1)
+
+    def __repr__(self):
+        return self.__class__.__name__
+
 
 def train(model, optimizer, loader):
     model.train()
@@ -326,11 +427,12 @@ def train(model, optimizer, loader):
     print("data loader size = ", len(loader))
 
     total_loss = 0
-    for data in tqdm.tqdm(loader):      
+    for data in tqdm(loader):      
         optimizer.zero_grad()
         data = data.to(device)
         
         # print(data)
+        pdb.set_trace()
 
         out = model(data)
         loss = F.nll_loss(out, data.y.view(-1))
@@ -367,9 +469,10 @@ def eval_loss(model, loader):
 def main():
 
     print('Testing ASAP')
-    layers = [5]
-    hiddens = [128]    
-    datasets = ['PROTEINS']
+    layers = [3]
+    hiddens = [256]    
+    # datasets = ['PROTEINS']
+    datasets = ['node']
     nets = [ASAP]
     results = []
 
@@ -386,18 +489,17 @@ def main():
             dataset = get_dataset(dataset_name, sparse=Net)
 
             print(' Dataset  :', dataset_name)
-            print(' features :', dataset.num_features)
-            print(' classes  :', dataset.num_classes)
-
             print(' NumLayers:', num_layers)
             print(' HiddenDim:', hidden)
-
-            model = Net(dataset, num_layers, hidden)
             
+            if dataset_name == 'node':
+                num_classes = 4
+                num_features = 5
+                
+            model = Net(num_classes, num_features, num_layers, hidden)
             print(' Model     :\n', model)
             for name, param in model.named_parameters():    
                 print(name, param.shape)
-
             '''
             loss, acc, std = cross_validation_with_val_set(
                 dataset,
@@ -438,7 +540,7 @@ def main():
 if __name__ == "__main__" :
     
     parser = argparse.ArgumentParser()
-    parser.add_argument('--epochs', type=int, default=20)
+    parser.add_argument('--epochs', type=int, default=2)
     parser.add_argument('--batch_size', type=int, default=1)
     parser.add_argument('--lr', type=float, default=0.005)
     parser.add_argument('--lr_decay_factor', type=float, default=0.5)
