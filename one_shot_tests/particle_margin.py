@@ -260,9 +260,10 @@ class TrackMLParticleTrackingDataset(Dataset):
         pids_unique = np.arange(pids_unique.size) # make it [not interested, noise, remapped pid]
         hits['remapped_pid'] = pids_unique[pids_inverse]
 
-        #for testing
-        print(10 + hits.size%3)
-        hits = hits[(hits['remapped_pid'] > 0) & (hits['remapped_pid'] < (10 + hits.size%3))]
+
+        #________for testing________________________________________
+        print(30 + hits.size%3)
+        hits = hits[(hits['remapped_pid'] > 0) & (hits['remapped_pid'] < (30 + hits.size%3))]
         hits['remapped_pid'] = hits['remapped_pid'] - 1
         
         
