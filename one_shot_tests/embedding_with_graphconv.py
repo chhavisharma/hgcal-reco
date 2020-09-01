@@ -1,4 +1,5 @@
 '''Python imports'''
+import os
 import numpy as np
 import awkward as ak
 from math import sqrt
@@ -12,6 +13,7 @@ import matplotlib.cm as cm
 
 # from IPython import display
 import time
+from datetime import datetime
 from timeit import default_timer as timer
 #https://github.com/eldridgejm/unionfind
 from unionfind import UnionFind
@@ -43,6 +45,44 @@ norm = mpl.colors.Normalize(vmin=-20, vmax=10)
 cmap = cm.hot
 m = cm.ScalarMappable(norm=norm, cmap=cmap)
 ctr = 0
+
+
+root_train = '/home/csharma/prototyping/data/train_1/'
+root_test = '/home/csharma/prototyping/data/train_1_/'
+
+plot_folder_name = 'event10_epoch3000_classes20_4D'
+plot_path        = './plots/'+plot_folder_name+'/'
+logfilename      = '/training.log'
+
+total_epochs = 3000
+train_samples  = 10
+test_samples  = 10
+input_classes = 20
+
+input_dim  = 3
+hidden_dim = 32
+output_dim = 2
+
+ncats_out  = 3
+nprops_out = 1
+
+conv_depth = 3
+k          = 8 
+edgecat_depth = 6 # TRY DEPTH==3
+make_plots   = True
+make_test_plots = True
+
+
+def logtofile(path, filename, logs):
+    filepath = path + filename
+    if os.path.exists(filepath):
+        append_write = 'a' # append if already exists
+    else:
+        append_write = 'w' # make a new file if not
+
+    logfile = open(filepath,append_write)
+    logfile.write(logs)
+    logfile.close()
 
 def simple_embedding_truth(coords, truth_label_by_hits, device='cpu'):
     truth_ordering = torch.argsort(truth_label_by_hits)    
@@ -330,11 +370,11 @@ class SimpleEmbeddingNetwork(nn.Module):
 
         return out, edge_scores, edge_index, cluster_map, cluster_props, cluster_batch
 
-def load_data(root_path):
+def load_data(root_path, samples):
     data = TrackMLParticleTrackingDataset(root=root_path,
                                         layer_pairs_plus=True,
                                         pt_min=0,
-                                        n_events=100, n_workers=1)
+                                        n_events=samples, n_workers=1)
     print('Number of events read = ',len(data))
     return data
 
@@ -356,94 +396,36 @@ def plot_event(my_data,y_t):
     ctr = ctr+1
     ctr = ctr%10
     plt.close(fig)
-    
 
-if __name__ == "__main__" :
+def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, lr_threshold_1, lr_threshold_2):
 
-    root = '/home/csharma/prototyping/data/train_1/'
-    plot_folder_name = 'event10_epoch2000_classes15'
-    plot_path        = './plots/'+plot_folder_name+'/'
-
-    total_epochs = 2000
-    n_samples  = 10
-    input_classes = 15
-
-    input_dim  = 3
-    hidden_dim = 32
-    output_dim = 2
-    
-    ncats_out  = 3
-    nprops_out = 1
-    
-    conv_depth = 3
-    k          = 8 
-    edgecat_depth = 6 # TRY DEPTH==3
-    make_plots   = True
-
-    # lr_threshold    = 1e-4
-    lr_threshold_1    = 1e-4 #5e-3
-    lr_threshold_2    = 5e-4 #1e-3
-
-    '''Load Data'''
-    data = load_data(root)
-
-    '''Load Model'''
-    model = SimpleEmbeddingNetwork(input_dim=input_dim, 
-                                hidden_dim=hidden_dim, 
-                                output_dim=output_dim,
-                                ncats_out=ncats_out,
-                                nprops_out=nprops_out,
-                                conv_depth=conv_depth, 
-                                edgecat_depth=edgecat_depth, 
-                                k=k, 
-                                aggr='add',
-                                norm=norm).to('cuda')
-    
-    '''Set Optimizer'''
-    opt = torch.optim.AdamW([
-                            {'params': list(model.inputnet.parameters()) + list(model.edgeconvs.parameters()) + list(model.output.parameters())},
-                            {'params': list(model.inputnet_cat.parameters()) + list(model.edgecatconvs.parameters()) + list(model.edge_classifier.parameters()), 'lr': 0.0},
-                            {'params': list(model.inputnet_prop.parameters()) + list(model.propertyconvs.parameters()) + list(model.property_predictor.parameters()), 'lr': 0.0}
-                            ], lr=2.5e-3, weight_decay=1e-3)
-    sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.70, patience=30)
-    # sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, 20, eta_min=0)
-
-    truth_cache  = []
-    all_loss     = []
-    sep_loss_avg = []
-    
-    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,n_samples*k))
-    marker_hits =    ['^','v','s','h','<','>']
-    marker_centers = ['+','1','x','3','2','4']
+    model.train()
 
     converged_embedding = False
     converged_categorizer = False
 
-    print('-------------------')
-    print('Root      : ',root)
-    print('Epochs    : ',total_epochs)
-    print('Samples   : ',n_samples)
-    print('Track Kind: ', input_classes)
-
-    print('InputdDim : ',input_dim)
-    print('HiddenDim : ',hidden_dim)
-    print('OutputDim : ',output_dim)
-
-    print('Model Parameters (trainable):',  sum(p.numel() for p in model.parameters() if p.requires_grad))
+    all_loss     = []
+    sep_loss_avg = []
+    pred_cluster_properties = []
+    edge_acc_track = np.zeros(train_samples, dtype=np.float)
     
+    
+    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,train_samples*k))
+    marker_hits =    ['^','v','s','h','<','>']
+    marker_centers = ['+','1','x','3','2','4']
 
     print('--------------------')
     print('Begin training :')
-    print('Plot ? ',make_plots)
 
     t1 = timer()
+    
     for epoch in range(total_epochs):
         
         '''book-keeping'''
-        sep_loss = np.zeros((n_samples,3), dtype=np.float)
-        avg_loss_track = np.zeros(n_samples, dtype=np.float)
-        edge_acc_track = np.zeros(n_samples, dtype=np.float)
-
+        sep_loss = np.zeros((train_samples,3), dtype=np.float)
+        avg_loss_track = np.zeros(train_samples, dtype=np.float)
+        edge_acc_track = np.zeros(train_samples, dtype=np.float)
+        pred_cluster_properties = []
         avg_loss = 0
         
         if make_plots:
@@ -460,7 +442,7 @@ if __name__ == "__main__" :
             opt.param_groups[2]['lr'] = lr_threshold_2
         
 
-        for idata, d in enumerate(data[0:n_samples]):            
+        for idata, d in enumerate(data[0:train_samples]):            
             
             d_gpu = d.to('cuda')
             y_orig = d_gpu.y
@@ -478,23 +460,13 @@ if __name__ == "__main__" :
             '''
             coords, edge_scores, edges, cluster_map, cluster_props, cluster_batch = model(d_gpu.x)
 
-            '''
-            #------------  DANIEL TRAINING VERSION ------------------
-            reference = coords.index_select(0, e_spatial[1])
-            neighbors = coords.index_select(0, e_spatial[0])
-            d = torch.sum((reference - neighbors)**2, dim=-1)
-            hinge_truth = (d_gpu.y[e_spatial[0]] == d_gpu.y[e_spatial[1]]).float()
-            hinge_truth[hinge_truth == 0] = -1
-            print(hinge_truth)
-            loss = torch.nn.functional.hinge_embedding_loss(d, hinge_truth, margin=1.0, reduction="mean")
-            '''
-            
+
             #-------------- LINDSEY TRAINING VERSION ------------------
             
-            # print('compute latent space distances for hinge loss ...')
+            '''Compute latent space distances'''
             multi_simple_hinge = simple_embedding_truth(coords, d_gpu.y, device='cuda')
             
-            # print('predicted centers in latent space - for plotting')
+            '''Predict centers in latent space '''
             centers = scatter_mean(coords, d_gpu.y, dim=0, dim_size=(torch.max(d_gpu.y).item()+1))
             
             '''Compute Losses'''
@@ -502,22 +474,21 @@ if __name__ == "__main__" :
             hinges = torch.cat([F.hinge_embedding_loss(dis**2, y, margin=1.0, reduction='mean')[None] 
                                 for dis, y in multi_simple_hinge],dim=0)
             
-            # Cross Entropy: Edge categories loss
+            '''Cross Entropy: Edge categories loss'''
             y_edgecat = (d_gpu.y[edges[0]] == d_gpu.y[edges[1]]).long()
             loss_ce = F.cross_entropy(edge_scores, y_edgecat, reduction='mean')
             
-            # MSE: Cluster loss
+            '''MSE: Cluster loss'''
             pred_cluster_match, y_properties = match_cluster_targets(cluster_map, d_gpu.y, d_gpu)
             loss_mse = F.mse_loss(cluster_props[pred_cluster_match].squeeze(), y_properties, reduction='mean')
             
-            # Combined loss
+            '''Combined loss'''
             loss = hinges.mean() + loss_ce + loss_mse
             avg_loss_track[idata] = loss.item()
             
             avg_loss += loss.item()
 
-
-            '''Track Losses and Acuracies'''   
+            '''Track Losses, Acuracies and Properties'''   
             sep_loss[idata,0]= hinges.mean().detach().cpu().numpy()
             sep_loss[idata,1]= loss_ce.detach().cpu().numpy()
             sep_loss[idata,2]= loss_mse.detach().cpu().numpy()
@@ -526,10 +497,13 @@ if __name__ == "__main__" :
             edge_accuracy = (torch.argmax(edge_scores, dim=1) == y_edgecat).sum().item() / (y_edgecat.size()[0])
             edge_acc_track[idata] = edge_accuracy
 
+            true_prop = y_properties.detach().cpu().numpy()
+            pred_prop = cluster_props[pred_cluster_match].squeeze().detach().cpu().numpy()
+            pred_cluster_properties.append([1/true_prop,1/pred_prop])
 
             '''Plot'''
             if (make_plots==True and (epoch==0 or epoch==total_epochs-1)) :            
-            # if (make_plots==True and (epoch==0 or epoch==total_epochs-1) and (idata==0 or idata==n_samples-1)) :
+            # if (make_plots==True and (epoch==0 or epoch==total_epochs-1) and (idata==0 or idata==train_samples-1)) :
             # if (make_plots==True) :
                 fig = plt.figure(figsize=(8,8))
                 if output_dim==3:
@@ -538,38 +512,31 @@ if __name__ == "__main__" :
                         ax.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                             coords[d_gpu.y == i,1].detach().cpu().numpy(),
                             coords[d_gpu.y == i,2].detach().cpu().numpy(),
-                            color=color_cycle[(i*k)%(n_samples*k - 1)], marker = marker_hits[i%6], s=100);
+                            color=color_cycle[(i*k)%(train_samples*k - 1)], marker = marker_hits[i%6], s=100);
 
                         ax.scatter(centers[i,0].detach().cpu().numpy(), 
                             centers[i,1].detach().cpu().numpy(), 
                             centers[i,2].detach().cpu().numpy(), 
-                            marker=marker_centers[i%6], color=color_cycle[(i*k)%(n_samples*k - 1)], s=100); 
+                            marker=marker_centers[i%6], color=color_cycle[(i*k)%(train_samples*k - 1)], s=100); 
                 elif output_dim==2:
                     for i in range(int(centers.size()[0])):
                             plt.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                                         coords[d_gpu.y == i,1].detach().cpu().numpy(),
-                                        color=color_cycle[(i*k)%(n_samples*k - 1)], 
+                                        color=color_cycle[(i*k)%(train_samples*k - 1)], 
                                         marker = marker_hits[i%6] )
 
                             plt.scatter(centers[i,0].detach().cpu().numpy(), 
                                         centers[i,1].detach().cpu().numpy(), 
-                                        color=color_cycle[(i*k)%(n_samples*k - 1)],  
+                                        color=color_cycle[(i*k)%(train_samples*k - 1)],  
                                         edgecolors='b',
                                         marker=marker_centers[i%6]) 
         
-                # display.clear_output(wait=True)
-                # display.display(plt.gcf())  
                 plt.title('train_plot_epoch_'+str(epoch)+'_ex_'+str(idata)+'_EdgeAcc_'+str('{:.5e}'.format(edge_accuracy)))
                 plt.savefig(plot_path+'train_plot_epoch_'+str(epoch)+'_ex_'+str(idata)+'.pdf')   
                 plt.close(fig)
 
-
             '''Loss Backward'''
-            # Loss Backward
             loss.backward()
-
-            # opt.step()
-            # sched.step(avg_loss)
 
             '''Per example stats'''
             # print(epoch, idata, 'loss / LR /centers -->>\n', 
@@ -593,24 +560,255 @@ if __name__ == "__main__" :
             print("Epoch: {}\nLosses:\nCombined : {:.5e}\nHinge_distance : {:.5e}\nCrossEntr_Edges : {:.5e}\nMSE_centers : {:.5e}\n".format(
                     epoch,all_loss[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
             print("LR: opt.param_groups \n[0] : {:.9e}  \n[1] : {:.9e}  \n[2] : {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
-            print("Average Edge Accuracies over {} events: {:.5e}".format(n_samples,edge_acc_track.mean()) )
+            print("Average Edge Accuracies over {} events: {:.5e}".format(train_samples,edge_acc_track.mean()) )
         
-        
+            if(epoch==total_epochs-1):
+                logtofile(plot_path, logfilename, "Epoch: {}\nLosses:\nCombined : {:.5e}\nHinge_distance : {:.5e}\nCrossEntr_Edges : {:.5e}\nMSE_centers : {:.5e}\n".format(
+                    epoch,all_loss[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+                logtofile(plot_path, logfilename,"LR: opt.param_groups \n[0] : {:.9e}  \n[1] : {:.9e}  \n[2] : {:.9e}\n".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
+                logtofile(plot_path, logfilename,"Average Edge Accuracies over {} events: {:.5e}\n".format(train_samples,edge_acc_track.mean()) )                    
+                logtofile(plot_path, logfilename,'Properties:\n')
+                logtofile(plot_path, logfilename,str(pred_cluster_properties))
+                logtofile(plot_path, logfilename,'--------------------------')
+
         '''Update Weights'''
         opt.step()
         sched.step(avg_loss)
 
     t2 = timer()
 
-    print("Training Complted in {:.5f}s.".format(t2-t1))
+    print("{} Events, {} Tracks each: training Complted in {:.5f}mins.".format(train_samples, input_classes, (t2-t1)/60.0))
 
     print('1/properties: ',1/y_properties)
     print('pred cluster matches: ',pred_cluster_match)
-    print('1/cluster_prop[cluster_match]: ',1/cluster_props[pred_cluster_match].squeeze())
+    print('1/cluster_prop[cluster_match]: ',1/cluster_props[pred_cluster_match].squeeze())    
+
+    return all_loss, sep_loss_avg, edge_acc_track, pred_cluster_properties
+
+def test(data, model):
+
+    model.eval()
+
+    all_loss     = []
+    sep_loss_avg = []
+    pred_cluster_properties = []
+    edge_acc_track = np.zeros(test_samples, dtype=np.float)
+    
+    
+    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,test_samples*k))
+    marker_hits =    ['^','v','s','h','<','>']
+    marker_centers = ['+','1','x','3','2','4']
+
+    print('--------------------')
+    print('Begin Testing :')
+
+    t1 = timer()
+    epoch=0
+
+    with torch.no_grad():
+        
+        '''book-keeping'''
+        sep_loss = np.zeros((test_samples,3), dtype=np.float)
+        avg_loss_track = np.zeros(test_samples, dtype=np.float)
+        edge_acc_track = np.zeros(test_samples, dtype=np.float)
+        pred_cluster_properties = []
+        avg_loss = 0
+        
+        if make_plots:
+            plt.clf()
+
+        for idata, d in enumerate(data[0:train_samples]):            
+            
+            d_gpu = d.to('cuda')
+            y_orig = d_gpu.y
+
+            d_gpu.x = d_gpu.x[d_gpu.y < input_classes] # just take the first three tracks
+            d_gpu.x = (d_gpu.x - torch.min(d_gpu.x, axis=0).values)/(torch.max(d_gpu.x, axis=0).values - torch.min(d_gpu.x, axis=0).values) # Normalise
+            d_gpu.y_particle_barcodes = d_gpu.y_particle_barcodes[d_gpu.y < input_classes]
+            d_gpu.y = d_gpu.y[d_gpu.y < input_classes]
+
+            '''
+            project data to some 2d plane where it is seperable usinfg the deep model
+            compute edge net scores and seperated cluster properties in that latent space
+            '''
+            coords, edge_scores, edges, cluster_map, cluster_props, cluster_batch = model(d_gpu.x)
+            
+            '''Compute latent space distances'''
+            multi_simple_hinge = simple_embedding_truth(coords, d_gpu.y, device='cuda')
+            
+            '''Predict centers in latent space '''
+            centers = scatter_mean(coords, d_gpu.y, dim=0, dim_size=(torch.max(d_gpu.y).item()+1))
+            
+            
+            '''LOSSES'''
+            
+            '''Hinge: embedding distance based loss'''
+            hinges = torch.cat([F.hinge_embedding_loss(dis**2, y, margin=1.0, reduction='mean')[None] 
+                                for dis, y in multi_simple_hinge],dim=0)
+            
+            '''Cross Entropy: Edge categories loss'''
+            y_edgecat = (d_gpu.y[edges[0]] == d_gpu.y[edges[1]]).long()
+            loss_ce = F.cross_entropy(edge_scores, y_edgecat, reduction='mean')
+            
+            '''MSE: Cluster loss'''
+            pred_cluster_match, y_properties = match_cluster_targets(cluster_map, d_gpu.y, d_gpu)
+            loss_mse = F.mse_loss(cluster_props[pred_cluster_match].squeeze(), y_properties, reduction='mean')
+            
+            '''Combined loss'''
+            loss = hinges.mean() + loss_ce + loss_mse
+            avg_loss_track[idata] = loss.item()
+            
+            avg_loss += loss.item()
+
+            '''Track Losses, Acuracies and Properties'''   
+            sep_loss[idata,0]= hinges.mean().detach().cpu().numpy()
+            sep_loss[idata,1]= loss_ce.detach().cpu().numpy()
+            sep_loss[idata,2]= loss_mse.detach().cpu().numpy()
+
+            true_edges = y_edgecat.sum().item()
+            edge_accuracy = (torch.argmax(edge_scores, dim=1) == y_edgecat).sum().item() / (y_edgecat.size()[0])
+            edge_acc_track[idata] = edge_accuracy
+
+            true_prop = y_properties.detach().cpu().numpy()
+            pred_prop = cluster_props[pred_cluster_match].squeeze().detach().cpu().numpy()
+            pred_cluster_properties.append([1/true_prop,1/pred_prop])
+
+            '''Plot'''
+            if (make_test_plots==True) :
+                
+                fig = plt.figure(figsize=(8,8))
+                if output_dim==3:
+                    ax = fig.add_subplot(111, projection='3d')
+                    for i in range(centers.size()[0]):  
+                        ax.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
+                            coords[d_gpu.y == i,1].detach().cpu().numpy(),
+                            coords[d_gpu.y == i,2].detach().cpu().numpy(),
+                            color=color_cycle[(i*k)%(train_samples*k - 1)], marker = marker_hits[i%6], s=100);
+
+                        ax.scatter(centers[i,0].detach().cpu().numpy(), 
+                            centers[i,1].detach().cpu().numpy(), 
+                            centers[i,2].detach().cpu().numpy(), 
+                            marker=marker_centers[i%6], color=color_cycle[(i*k)%(train_samples*k - 1)], s=100); 
+                elif output_dim==2:
+                    for i in range(int(centers.size()[0])):
+                            plt.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
+                                        coords[d_gpu.y == i,1].detach().cpu().numpy(),
+                                        color=color_cycle[(i*k)%(train_samples*k - 1)], 
+                                        marker = marker_hits[i%6] )
+
+                            plt.scatter(centers[i,0].detach().cpu().numpy(), 
+                                        centers[i,1].detach().cpu().numpy(), 
+                                        color=color_cycle[(i*k)%(train_samples*k - 1)],  
+                                        edgecolors='b',
+                                        marker=marker_centers[i%6]) 
+        
+                plt.title('test_plot_'+'_ex_'+str(idata)+'_EdgeAcc_'+str('{:.5e}'.format(edge_accuracy)))
+                plt.savefig(plot_path+'test_plot_'+'_ex_'+str(idata)+'.pdf')   
+                plt.close(fig)
+
+
+            '''Per example stats'''
+            # print(epoch, idata, 'loss / LR /centers -->>\n', 
+            #     loss.item(), loss_ce.item(), loss_mse.item(), 
+            #     '\n', opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr'],
+            #     '\n', 'N_true_edges / accuracy -->> ', y_edgecat.sum().item(), '/', (torch.argmax(edge_scores, dim=1) == y_edgecat).sum().item()/(y_edgecat.size()[0]),
+            #     '\n centers --> ', centers,
+            #     '\n cluster_properties -> ', cluster_props,
+            #     '\n hinges.mean() :', hinges.mean().detach().cpu().numpy(),
+            #     '\n loss_ce       :', loss_ce.detach().cpu().numpy(),
+            #     '\n loss_mse      :', loss_mse.detach().cpu().numpy()
+            #     )
+        
+        '''track Epoch Updates'''
+        all_loss.append(avg_loss_track.mean())
+        sep_loss_avg.append([sep_loss[:,0].mean(), sep_loss[:,1].mean(), sep_loss[:,2].mean()])
+
+        '''Test Stats'''
+        print('--------------------')
+        print("TEST: \nLosses:\nCombined : {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges : {:.5e}\nMSE_centers : {:.5e}\n".format(
+                all_loss[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+        print("Average Edge Accuracies over {} events: {:.5e}".format(test_samples,edge_acc_track.mean()) )
     
 
-    '''Learning Curve / Clusters / Centers'''
+        logtofile(plot_path, logfilename, "Losses:\nCombined : {:.5e}\nHinge_distance : {:.5e}\nCrossEntr_Edges : {:.5e}\nMSE_centers : {:.5e}\n".format(
+                                                                all_loss[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+        logtofile(plot_path, logfilename,"Average Edge Accuracies over {} events: {:.5e}\n".format(test_samples,edge_acc_track.mean()) )                    
+        logtofile(plot_path, logfilename,'Properties:\n')
+        logtofile(plot_path, logfilename,str(pred_cluster_properties))
+        logtofile(plot_path, logfilename,'--------------------------')
+
+    t2 = timer()
+
+    print("{} Events, {} Tracks each: testing Complted in {:.5f}mins.".format(test_samples, input_classes, (t2-t1)/60.0))
+
+    return all_loss, sep_loss_avg, edge_acc_track, pred_cluster_properties
+
+
+if __name__ == "__main__" :
+
+    '''Load Data'''
+    train_data = load_data(root_train, train_samples)
+    test_data = load_data(root_test, test_samples)
+
+    '''Load Model'''
+    model = SimpleEmbeddingNetwork(input_dim=input_dim, 
+                                hidden_dim=hidden_dim, 
+                                output_dim=output_dim,
+                                ncats_out=ncats_out,
+                                nprops_out=nprops_out,
+                                conv_depth=conv_depth, 
+                                edgecat_depth=edgecat_depth, 
+                                k=k, 
+                                aggr='add',
+                                norm=norm).to('cuda')
     
+    # lr_threshold    = 1e-4
+    lr_threshold_1    = 1e-4 #5e-3
+    lr_threshold_2    = 5e-3 #1e-3
+
+    lr_param_gp_1     = 2.5e-3
+    lr_param_gp_2     = 0.0
+    lr_param_gp_3     = 1e-4
+
+
+    '''Set Optimizer'''
+    opt = torch.optim.AdamW([
+                            {'params': list(model.inputnet.parameters()) + list(model.edgeconvs.parameters()) + list(model.output.parameters())},
+                            {'params': list(model.inputnet_cat.parameters()) + list(model.edgecatconvs.parameters()) + list(model.edge_classifier.parameters()), 'lr': lr_param_gp_2},
+                            {'params': list(model.inputnet_prop.parameters()) + list(model.propertyconvs.parameters()) + list(model.property_predictor.parameters()), 'lr': lr_param_gp_3}
+                            ], lr=lr_param_gp_1, weight_decay=1e-3)
+    sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.70, patience=30)
+    # sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, 20, eta_min=0)
+
+    print('-------------------')
+    print('Epochs    : ',total_epochs)
+    print('Samples   : ',train_samples)
+    print('Track Kind: ', input_classes)
+
+    print('InputdDim : ',input_dim)
+    print('HiddenDim : ',hidden_dim)
+    print('OutputDim : ',output_dim)
+
+    print('Model Parameters (trainable):',  sum(p.numel() for p in model.parameters() if p.requires_grad))
+ 
+    logtofile(plot_path, logfilename, '========================================\n')
+    logtofile(plot_path, logfilename, datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+    logtofile(plot_path, logfilename, "\nCONFIG: {}\nEpochs :{}\nEvents :{}\nTracks: {}\n".format(plot_folder_name, total_epochs, train_samples, input_classes))
+    logtofile(plot_path, logfilename, "MODEL:\nInputDim={}\nHiddenDim={}\nOutputDim={}\nNcatsOut={}\nNPropsOut={}\nConvDepth={}\nKNN_k={}\nEdgeNetDepth={}\n".format(
+                                                input_dim,hidden_dim,output_dim,ncats_out,nprops_out,conv_depth,k,edgecat_depth))
+    logtofile(plot_path, logfilename, "LEARNING RATE:\nParamgp1:{:.3e}\nParamgp2:{:.3e}\nParamgp3:{:.3e}\n\n".format(lr_param_gp_1, lr_param_gp_2, lr_param_gp_3))
+
+
+    ''' Train '''
+    all_loss, sep_loss_avg, edge_acc_track, pred_cluster_properties = train(train_data, model, opt, sched, \
+                                                                        lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, \
+                                                                        lr_threshold_1, lr_threshold_2)
+
+    ''' Test '''
+    test_all_loss, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties = test(test_data, model)    
+
+
+    '''Learning Curve / Clusters / Centers'''
     if(make_plots==True):
 
         '''Plot Learning Curve'''
@@ -653,12 +851,12 @@ if __name__ == "__main__" :
         plt.savefig(plot_path+'learned_clusters.pdf')
         plt.close(fig)
 
-    print("UnionFind Roots:")
-    objects = UnionFind(coords.size()[0])
-    good_edges = edges.t()[torch.argmax(edge_scores, dim=1) > 0].cpu().numpy()
-    for edge in good_edges:
-        objects.union(edge[0],edge[1])
-        #objects.union(edge[1],edge[0])
-    roots = np.array([objects.find(i) for i in range(coords.size()[0])], dtype=np.int64)
-    print(roots)
+    # print("UnionFind Roots:")
+    # objects = UnionFind(coords.size()[0])
+    # good_edges = edges.t()[torch.argmax(edge_scores, dim=1) > 0].cpu().numpy()
+    # for edge in good_edges:
+    #     objects.union(edge[0],edge[1])
+    #     #objects.union(edge[1],edge[0])
+    # roots = np.array([objects.find(i) for i in range(coords.size()[0])], dtype=np.int64)
+    # print(roots)
     print('Finish.')
