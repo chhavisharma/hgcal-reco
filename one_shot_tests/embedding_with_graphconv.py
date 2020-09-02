@@ -4,12 +4,11 @@ import numpy as np
 import awkward as ak
 from math import sqrt
 import networkx as nx
-import matplotlib
-import matplotlib.pyplot as plt
-from  mpl_toolkits import mplot3d
-from mpl_toolkits.mplot3d import Axes3D
 import matplotlib as mpl
 import matplotlib.cm as cm
+import matplotlib.pyplot as plt
+from  mpl_toolkits import mplot3d
+from typing import List
 
 # from IPython import display
 import time
@@ -23,7 +22,6 @@ import pdb
 import torch
 from torch import nn
 import torch.nn.functional as F
-
 from torch_cluster import knn_graph, radius_graph
 from torch_scatter import scatter_mean, scatter_add
 
@@ -32,7 +30,6 @@ from torch_geometric.nn import max_pool_x
 from torch_geometric.utils.undirected import to_undirected
 from torch_geometric.nn import EdgeConv
 from torch_geometric.typing import OptTensor, PairTensor
-from typing import List
 
 '''File imports'''
 from particle_margin import TrackMLParticleTrackingDataset
@@ -46,16 +43,21 @@ m = cm.ScalarMappable(norm=norm, cmap=cmap)
 ctr = 0
 
 
-root = '/home/csharma/prototyping/data/train_1_/'
+'''
+SET CONFIG / Move to Config File 
+--------------------------------
+'''
 
-plot_folder_name = 'event1000_epoch3000_classes10'
-plot_path        = './plots/'+plot_folder_name+'/'
-logfilename      = '/training.log'
+data_root    = '/home/csharma/prototyping/data/train_1_/'
+logfile_name = 'training.log'
 
-total_epochs = 3000
-train_samples  = 100
-test_samples  = 100
+total_epochs  = 3000
+train_samples = 100
+test_samples  = 10
 input_classes = 10
+
+plot_folder_name = 'event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)
+plot_path        = './plots/'+plot_folder_name+'/'
 
 input_dim  = 3
 hidden_dim = 32
@@ -73,14 +75,14 @@ make_test_plots = True
 
 
 def logtofile(path, filename, logs):
-    filepath = path + filename
+    filepath = path + '/'+ filename
     if os.path.exists(filepath):
         append_write = 'a' # append if already exists
     else:
-        append_write = 'w' # make a new file if not
-
+        append_write = 'w'
     logfile = open(filepath,append_write)
     logfile.write(logs)
+    logfile.write('\n')
     logfile.close()
 
 def simple_embedding_truth(coords, truth_label_by_hits, device='cpu'):
@@ -382,7 +384,7 @@ def load_data(root_path, samples):
                                         layer_pairs_plus=True,
                                         pt_min=0,
                                         n_events=samples, n_workers=1)
-    print('Number of events read = ',len(data))
+    print('{} events read.'.format(data))
     return data
 
 def plot_event(my_data,y_t):
@@ -411,7 +413,7 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
     converged_embedding = False
     converged_categorizer = False
 
-    all_loss     = []
+    combo_loss_avg = []
     sep_loss_avg = []
     pred_cluster_properties = []
     edge_acc_track = np.zeros(train_samples, dtype=np.float)
@@ -420,15 +422,14 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
     marker_hits =    ['^','v','s','h','<','>']
     marker_centers = ['+','1','x','3','2','4']
 
-    print('--------------------')
-    print('Begin training :')
+    print('\n[TRAIN]:')
 
     t1 = timer()
     
     for epoch in range(total_epochs):
         
         '''book-keeping'''
-        sep_loss = np.zeros((train_samples,3), dtype=np.float)
+        sep_loss_track = np.zeros((train_samples,3), dtype=np.float)
         avg_loss_track = np.zeros(train_samples, dtype=np.float)
         edge_acc_track = np.zeros(train_samples, dtype=np.float)
         pred_cluster_properties = []
@@ -461,19 +462,17 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
             
 
             '''
-            project data to some 2d plane where it is seperable usinfg the deep model
-            compute edge net scores and seperated cluster properties in that latent space
+            project embedding to some 2d latent space where it is seperable using the deep model
+            compute edge net scores and seperated cluster properties with the ebedding
             '''
             coords, edge_scores, edges, cluster_map, cluster_props, cluster_batch = model(d_gpu.x)
 
-
-            #-------------- LINDSEY TRAINING VERSION ------------------
-            
+            #-------------- LINDSEY TRAINING VERSION ------------------         
             '''Compute latent space distances'''
             multi_simple_hinge = simple_embedding_truth(coords, d_gpu.y, device='cuda')
             # multi_simple_hinge += simple_embedding_truth(coords_interm, d_gpu.y, device='cuda')
             
-            '''Predict centers in latent space '''
+            '''Compute centers in latent space '''
             centers = scatter_mean(coords, d_gpu.y, dim=0, dim_size=(torch.max(d_gpu.y).item()+1))
             
             '''Compute Losses'''
@@ -481,24 +480,24 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
             hinges = torch.cat([F.hinge_embedding_loss(dis**2, y, margin=1.0, reduction='mean')[None] 
                                 for dis, y in multi_simple_hinge],dim=0)
             
-            '''Cross Entropy: Edge categories loss'''
+            #Cross Entropy: Edge categories loss
             y_edgecat = (d_gpu.y[edges[0]] == d_gpu.y[edges[1]]).long()
             loss_ce = F.cross_entropy(edge_scores, y_edgecat, reduction='mean')
             
-            '''MSE: Cluster loss'''
+            #MSE: Cluster loss
             pred_cluster_match, y_properties = match_cluster_targets(cluster_map, d_gpu.y, d_gpu)
             loss_mse = F.mse_loss(cluster_props[pred_cluster_match].squeeze(), y_properties, reduction='mean')
             
-            '''Combined loss'''
+            #Combined loss
             loss = hinges.mean() + loss_ce + loss_mse
             avg_loss_track[idata] = loss.item()
             
             avg_loss += loss.item()
 
             '''Track Losses, Acuracies and Properties'''   
-            sep_loss[idata,0]= hinges.mean().detach().cpu().numpy()
-            sep_loss[idata,1]= loss_ce.detach().cpu().numpy()
-            sep_loss[idata,2]= loss_mse.detach().cpu().numpy()
+            sep_loss_track[idata,0]= hinges.mean().detach().cpu().numpy()
+            sep_loss_track[idata,1]= loss_ce.detach().cpu().numpy()
+            sep_loss_track[idata,2]= loss_mse.detach().cpu().numpy()
 
             true_edges = y_edgecat.sum().item()
             edge_accuracy = (torch.argmax(edge_scores, dim=1) == y_edgecat).sum().item() / (y_edgecat.size()[0])
@@ -508,10 +507,9 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
             pred_prop = cluster_props[pred_cluster_match].squeeze().detach().cpu().numpy()
             pred_cluster_properties.append([1/true_prop,1/pred_prop])
 
-            '''Plot'''
-            if (make_plots==True and (epoch==0 or epoch==total_epochs-1) and idata%100==0) :            
-            # if (make_plots==True and (epoch==0 or epoch==total_epochs-1) and (idata==0 or idata==train_samples-1)) :
-            # if (make_plots==True) :
+            '''Plot Training Clusters'''
+            # if (make_plots==True):
+            if (make_plots==True and (epoch==0 or epoch==total_epochs-1) and idata%(train_samples/10)==0):     
                 fig = plt.figure(figsize=(8,8))
                 if output_dim==3:
                     ax = fig.add_subplot(111, projection='3d')
@@ -542,61 +540,49 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
                 plt.savefig(plot_path+'train_plot_epoch_'+str(epoch)+'_ex_'+str(idata)+'.pdf')   
                 plt.close(fig)
 
-            '''Loss Backward'''
+            '''Loss Backward''' 
             loss.backward()
-
-            '''Per example stats'''
-            # print(epoch, idata, 'loss / LR /centers -->>\n', 
-            #     loss.item(), loss_ce.item(), loss_mse.item(), 
-            #     '\n', opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr'],
-            #     '\n', 'N_true_edges / accuracy -->> ', y_edgecat.sum().item(), '/', (torch.argmax(edge_scores, dim=1) == y_edgecat).sum().item()/(y_edgecat.size()[0]),
-            #     '\n centers --> ', centers,
-            #     '\n cluster_properties -> ', cluster_props,
-            #     '\n hinges.mean() :', hinges.mean().detach().cpu().numpy(),
-            #     '\n loss_ce       :', loss_ce.detach().cpu().numpy(),
-            #     '\n loss_mse      :', loss_mse.detach().cpu().numpy()
-            #     )
         
         '''track Epoch Updates'''
-        all_loss.append(avg_loss_track.mean())
-        sep_loss_avg.append([sep_loss[:,0].mean(), sep_loss[:,1].mean(), sep_loss[:,2].mean()])
+        combo_loss_avg.append(avg_loss_track.mean())
+        sep_loss_avg.append([sep_loss_track[:,0].mean(), sep_loss_track[:,1].mean(), sep_loss_track[:,2].mean()])
 
         if((epoch%100==0 or epoch==total_epochs-1)):
             '''Per Epoch Stats'''
             print('--------------------')
-            print("Epoch: {}\nLosses:\nCombined : {:.5e}\nHinge_distance : {:.5e}\nCrossEntr_Edges : {:.5e}\nMSE_centers : {:.5e}\n".format(
-                    epoch,all_loss[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
-            print("LR: opt.param_groups \n[0] : {:.9e}  \n[1] : {:.9e}  \n[2] : {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
-            print("Average Edge Accuracies over {} events: {:.5e}".format(train_samples,edge_acc_track.mean()) )
+            print("Epoch: {}\nLosses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
+                    epoch,combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+            print("LR: opt.param_groups \n[0]: {:.9e}  \n[1]: {:.9e}  \n[2]: {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
+            print("[TRAIN] Average Edge Accuracies over {} events: {:.5e}".format(train_samples,edge_acc_track.mean()) )
         
-            if(epoch==total_epochs-1):
-                logtofile(plot_path, logfilename, "Epoch: {}\nLosses:\nCombined : {:.5e}\nHinge_distance : {:.5e}\nCrossEntr_Edges : {:.5e}\nMSE_centers : {:.5e}\n".format(
-                    epoch,all_loss[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
-                logtofile(plot_path, logfilename,"LR: opt.param_groups \n[0] : {:.9e}  \n[1] : {:.9e}  \n[2] : {:.9e}\n".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
-                logtofile(plot_path, logfilename,"Average Edge Accuracies over {} events: {:.5e}\n".format(train_samples,edge_acc_track.mean()) )                    
-                # logtofile(plot_path, logfilename,'Properties:\n')
-                # logtofile(plot_path, logfilename,str(pred_cluster_properties))
-                logtofile(plot_path, logfilename,'--------------------------')
+            if(epoch==total_epochs-1 or epoch==0):
+                logtofile(plot_path, logfile_name, "Epoch: {}\nLosses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
+                    epoch,combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+                logtofile(plot_path, logfile_name,"LR: opt.param_groups \n[0]: {:.9e}  \n[1]: {:.9e}  \n[2]: {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
+                logtofile(plot_path, logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(train_samples, input_classes,edge_acc_track.mean()) )                    
+                # logtofile(plot_path, logfile_name,'Properties:\n')
+                # logtofile(plot_path, logfile_name,str(pred_cluster_properties))
+                logtofile(plot_path, logfile_name,'--------------------------')
 
         '''Update Weights'''
         opt.step()
         sched.step(avg_loss)
 
     t2 = timer()
+    print('--------------------')
+    print("Training Complted in {:.5f}mins.".format((t2-t1)/60.0))
 
-    print("{} Events, {} Tracks each: training Complted in {:.5f}mins.".format(train_samples, input_classes, (t2-t1)/60.0))
+    # print('1/properties: ',1/y_properties)
+    # print('pred cluster matches: ',pred_cluster_match)
+    # print('1/cluster_prop[cluster_match]: ',1/cluster_props[pred_cluster_match].squeeze())    
 
-    print('1/properties: ',1/y_properties)
-    print('pred cluster matches: ',pred_cluster_match)
-    print('1/cluster_prop[cluster_match]: ',1/cluster_props[pred_cluster_match].squeeze())    
-
-    return all_loss, sep_loss_avg, edge_acc_track, pred_cluster_properties
+    return combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties
 
 def test(data, model):
 
     model.eval()
 
-    all_loss     = []
+    combo_loss_avg     = []
     sep_loss_avg = []
     pred_cluster_properties = []
     edge_acc_track = np.zeros(test_samples, dtype=np.float)
@@ -606,8 +592,7 @@ def test(data, model):
     marker_hits =    ['^','v','s','h','<','>']
     marker_centers = ['+','1','x','3','2','4']
 
-    print('--------------------')
-    print('Begin Testing :')
+    print('\n[TEST]:')
 
     t1 = timer()
     epoch=0
@@ -615,7 +600,7 @@ def test(data, model):
     with torch.no_grad():
         
         '''book-keeping'''
-        sep_loss = np.zeros((test_samples,3), dtype=np.float)
+        sep_loss_track = np.zeros((test_samples,3), dtype=np.float)
         avg_loss_track = np.zeros(test_samples, dtype=np.float)
         edge_acc_track = np.zeros(test_samples, dtype=np.float)
         pred_cluster_properties = []
@@ -669,9 +654,9 @@ def test(data, model):
             avg_loss += loss.item()
 
             '''Track Losses, Acuracies and Properties'''   
-            sep_loss[idata,0]= hinges.mean().detach().cpu().numpy()
-            sep_loss[idata,1]= loss_ce.detach().cpu().numpy()
-            sep_loss[idata,2]= loss_mse.detach().cpu().numpy()
+            sep_loss_track[idata,0]= hinges.mean().detach().cpu().numpy()
+            sep_loss_track[idata,1]= loss_ce.detach().cpu().numpy()
+            sep_loss_track[idata,2]= loss_mse.detach().cpu().numpy()
 
             true_edges = y_edgecat.sum().item()
             edge_accuracy = (torch.argmax(edge_scores, dim=1) == y_edgecat).sum().item() / (y_edgecat.size()[0])
@@ -681,8 +666,8 @@ def test(data, model):
             pred_prop = cluster_props[pred_cluster_match].squeeze().detach().cpu().numpy()
             pred_cluster_properties.append([1/true_prop,1/pred_prop])
 
-            '''Plot'''
-            if (make_test_plots==True) :
+            '''Plot test clusters'''
+            if (make_test_plots==True):
                 
                 fig = plt.figure(figsize=(8,8))
                 if output_dim==3:
@@ -713,47 +698,37 @@ def test(data, model):
                 plt.title('test_plot_'+'_ex_'+str(idata)+'_EdgeAcc_'+str('{:.5e}'.format(edge_accuracy)))
                 plt.savefig(plot_path+'test_plot_'+'_ex_'+str(idata)+'.pdf')   
                 plt.close(fig)
-
-
-            '''Per example stats'''
-            # print(epoch, idata, 'loss / LR /centers -->>\n', 
-            #     loss.item(), loss_ce.item(), loss_mse.item(), 
-            #     '\n', opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr'],
-            #     '\n', 'N_true_edges / accuracy -->> ', y_edgecat.sum().item(), '/', (torch.argmax(edge_scores, dim=1) == y_edgecat).sum().item()/(y_edgecat.size()[0]),
-            #     '\n centers --> ', centers,
-            #     '\n cluster_properties -> ', cluster_props,
-            #     '\n hinges.mean() :', hinges.mean().detach().cpu().numpy(),
-            #     '\n loss_ce       :', loss_ce.detach().cpu().numpy(),
-            #     '\n loss_mse      :', loss_mse.detach().cpu().numpy()
-            #     )
         
         '''track Epoch Updates'''
-        all_loss.append(avg_loss_track.mean())
-        sep_loss_avg.append([sep_loss[:,0].mean(), sep_loss[:,1].mean(), sep_loss[:,2].mean()])
+        combo_loss_avg.append(avg_loss_track.mean())
+        sep_loss_avg.append([sep_loss_track[:,0].mean(), sep_loss_track[:,1].mean(), sep_loss_track[:,2].mean()])
 
         '''Test Stats'''
         print('--------------------')
-        print("TEST: \nLosses:\nCombined : {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges : {:.5e}\nMSE_centers : {:.5e}\n".format(
-                all_loss[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
-        print("Average Edge Accuracies over {} events: {:.5e}".format(test_samples,edge_acc_track.mean()) )
+        print("Losses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
+                combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+        print("[TEST] Average Edge Accuracies over {} events: {:.5e}".format(test_samples,edge_acc_track.mean()) )
 
-        logtofile(plot_path, logfilename,'\n\nTEST:\n')
-        logtofile(plot_path, logfilename, "Losses:\nCombined : {:.5e}\nHinge_distance : {:.5e}\nCrossEntr_Edges : {:.5e}\nMSE_centers : {:.5e}\n".format(
-                                                                all_loss[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
-        logtofile(plot_path, logfilename,"Average Edge Accuracies over {} events: {:.5e}\n".format(test_samples,edge_acc_track.mean()) )                    
-        logtofile(plot_path, logfilename,'Properties:\n')
-        logtofile(plot_path, logfilename,str(pred_cluster_properties))
-        logtofile(plot_path, logfilename,'--------------------------')
+        logtofile(plot_path, logfile_name,'\nTEST:')
+        logtofile(plot_path, logfile_name, "Losses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
+                                                                combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+        logtofile(plot_path, logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(test_samples,input_classes,edge_acc_track.mean()) )                    
+        logtofile(plot_path, logfile_name,'Properties:')
+        logtofile(plot_path, logfile_name,str(pred_cluster_properties))
+        logtofile(plot_path, logfile_name,'--------------------------')
 
     t2 = timer()
 
-    print("{} Events, {} Tracks each: testing Complted in {:.5f}mins.".format(test_samples, input_classes, (t2-t1)/60.0))
-    return all_loss, sep_loss_avg, edge_acc_track, pred_cluster_properties
+    print("Testing Complted in {:.5f}mins.\n".format((t2-t1)/60.0))
+    return combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties
 
-if __name__ == "__main__" :
+if __name__ == "__main__":
+
+    if not os.path.exists(plot_path):
+        os.makedirs(plot_path)
 
     '''Load Data'''
-    data = load_data(root, train_samples+test_samples)
+    data = load_data(data_root, train_samples+test_samples)
 
     '''Load Model'''
     model = SimpleEmbeddingNetwork(input_dim=input_dim, 
@@ -769,14 +744,12 @@ if __name__ == "__main__" :
                                 interm_out=interm_out
                                 ).to('cuda')
     
-    # lr_threshold    = 1e-4
     lr_threshold_1    = 1e-4 #5e-3
     lr_threshold_2    = 7.5e-4 #1e-3
 
     lr_param_gp_1     = 2.5e-3
     lr_param_gp_2     = 0   
     lr_param_gp_3     = 0  
-
 
     '''Set Optimizer'''
     opt = torch.optim.AdamW([
@@ -785,36 +758,34 @@ if __name__ == "__main__" :
                             {'params': list(model.inputnet_prop.parameters()) + list(model.propertyconvs.parameters()) + list(model.property_predictor.parameters()), 'lr': lr_param_gp_3}
                             ], lr=lr_param_gp_1, weight_decay=1e-3)
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.70, patience=30)
-    # sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, 20, eta_min=0)
 
-    print('\n\n-------------------')
-    print('Epochs    : ',total_epochs)
-    print('Samples   : ',train_samples)
-    print('Track Kind: ', input_classes)
-
-    print('InputdDim : ',input_dim)
-    print('HiddenDim : ',hidden_dim)
-    print('OutputDim : ',output_dim)
-    print('IntermOut : ',interm_out)
-
+    print('[CONFIG]')
+    print('Epochs   : ', total_epochs)
+    print('Samples  : ', train_samples)
+    print('TrackKind: ', input_classes)
+    print('InputdDim: ', input_dim)
+    print('HiddenDim: ', hidden_dim)
+    print('OutputDim: ', output_dim)
+    print('IntermOut: ', interm_out)
     print('Model Parameters (trainable):',  sum(p.numel() for p in model.parameters() if p.requires_grad))
 
-    logtofile(plot_path, logfilename, '========================================\n')
-    logtofile(plot_path, logfilename, datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-    logtofile(plot_path, logfilename, "\nCONFIG: {}\nEpochs :{}\nEvents :{}\nTracks: {}\n".format(plot_folder_name, total_epochs, train_samples, input_classes))
-    logtofile(plot_path, logfilename, "MODEL:\nInputDim={}\nHiddenDim={}\nOutputDim={}\ninterm_out={}\nNcatsOut={}\nNPropsOut={}\nConvDepth={}\nKNN_k={}\nEdgeNetDepth={}\n".format(
+
+    logtofile(plot_path, logfile_name, '\nStart time: '+datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+    logtofile(plot_path, logfile_name, "\nCONFIG: {}\nEpochs:{}\nEvents:{}\nTracks: {}".format(plot_folder_name, total_epochs, train_samples, input_classes))
+    logtofile(plot_path, logfile_name, "MODEL:\nInputDim={}\nHiddenDim={}\nOutputDim={}\ninterm_out={}\nNcatsOut={}\nNPropsOut={}\nConvDepth={}\nKNN_k={}\nEdgeNetDepth={}".format(
                                                 input_dim,hidden_dim,output_dim,interm_out,ncats_out,nprops_out,conv_depth,k,edgecat_depth))
-    logtofile(plot_path, logfilename, "LEARNING RATE:\nParamgp1:{:.3e}\nParamgp2:{:.3e}\nParamgp3:{:.3e}\n".format(lr_param_gp_1, lr_param_gp_2, lr_param_gp_3))
-    logtofile(plot_path, logfilename, "threshold_1={:.3e}\nthreshold_2={:.3e}\n\n".format(lr_threshold_1, lr_threshold_2))
+    logtofile(plot_path, logfile_name, "LEARNING RATE:\nParamgp1:{:.3e}\nParamgp2:{:.3e}\nParamgp3:{:.3e}".format(lr_param_gp_1, lr_param_gp_2, lr_param_gp_3))
+    logtofile(plot_path, logfile_name, "threshold_1={:.3e}\nthreshold_2={:.3e}\n".format(lr_threshold_1, lr_threshold_2))
+
 
 
     ''' Train '''
-    all_loss, sep_loss_avg, edge_acc_track, pred_cluster_properties = train(data, model, opt, sched, \
+    combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties = train(data, model, opt, sched, \
                                                                         lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, \
                                                                         lr_threshold_1, lr_threshold_2)
 
     ''' Test '''
-    test_all_loss, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties = test(data, model)    
+    test_combo_loss_avg, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties = test(data, model)    
 
 
     '''Learning Curve / Clusters / Centers'''
@@ -831,7 +802,7 @@ if __name__ == "__main__" :
 
         ax2 = fig.add_subplot(122)
         ax2.plot(np.arange(total_epochs), [x[2] for x in sep_loss_avg], color='olive', linewidth=1, label="MSE")
-        ax2.plot(np.arange(total_epochs), all_loss, color='red', linewidth=2, label="Combined")
+        ax2.plot(np.arange(total_epochs), combo_loss_avg, color='red', linewidth=2, label="Combined")
         ax2.set_xlabel("Epochs")
         ax2.set_ylabel("Losses")
         ax2.legend()
@@ -842,11 +813,12 @@ if __name__ == "__main__" :
         plt.savefig(plot_path + plot_folder_name+'_Learning_curve.pdf')
         plt.close(fig)
 
-        print("Plot learned clusters")
-        n_clusters = data[0].y[data[0].y < input_classes].max().item() + 1
-        print("Number of clusters : ", n_clusters)
+        # pdb.set_trace()
 
-        pdb.set_trace()
+
+        # print("Plot learned clusters")
+        # n_clusters = data[0].y[data[0].y < input_classes].max().item() + 1
+        # print("Number of clusters: ", n_clusters)
 
         # fig, ax = plt.subplots()
         # for i in range(n_clusters):
@@ -869,4 +841,3 @@ if __name__ == "__main__" :
     #     #objects.union(edge[1],edge[0])
     # roots = np.array([objects.find(i) for i in range(coords.size()[0])], dtype=np.int64)
     # print(roots)
-    print('Finish.')
