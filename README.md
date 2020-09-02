@@ -8,11 +8,12 @@ ML based Reconstruction for HgCal Data. A tracker for work done at Fermilabs.\
 ### Index
 - [Summary](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#summary)
 - [Tentative Roadmap](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#tentative-roadmap)
-- [Week Jun 29 - Jul 3](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jun-29---jul-3)
-- [Week Jun 6  - Jul 10](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-6---jul-10)
-- [Week Jul 13 - Jul 17](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-13---jul-17)
-- [Week Jul 20 - Jul 24](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-13---jul-17)
-- [Week Jul 27 - Jul 31](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-13---jul-17)
+- [Week Jun 29](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jun-29)
+- [Week Jun 6](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-6)
+- [Week Jul 13](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-13)
+- [Week Jul 20](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-20)
+- [Week Jul 27](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-27)
+- [A Significant Week](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#significant-update)
 - [Resources and References](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#resources-and-references)
 
 
@@ -64,10 +65,10 @@ ________________________________________________________________________________
 
 _________________________________________________________________________________________________
 
-### Weekly Tracking
+### Update Tracking
 
 
-##### Week Jun 29 - Jul 3
+##### Week Jun 29
  
 Exisitng Pipeline: Graph Neural Networks are used to model raw HGCal data into particle shower clusters in these 4 categories.
   - 0 Noise
@@ -82,8 +83,7 @@ Exisitng Pipeline: Graph Neural Networks are used to model raw HGCal data into p
 
 _________________________________________________________________________________________________
 
-##### Week Jul 6 - Jul 10
-
+##### Week Jul 6 
 
 Re-training EdgeNet
 Re-training Dynamic Reduction Net
@@ -96,31 +96,29 @@ Re-training Dynamic Reduction Net
 
 _________________________________________________________________________________________________
 
-##### Week Jul 13 - Jul 17
-
+##### Week Jul 13 
 Hyperparameter Tuning
 Optimal Neighbours for Graph CNN Accumulation
 Optimal number of Pooling Layers
 Mean pool v/s Avg Pool 
 
-
 _________________________________________________________________________________________________
 
-##### Week Jul 20 - Jul 24
-
+##### Week Jul 20 
 Paper Discussion - [ASAP](https://arxiv.org/abs/1911.07979) with [MultiLabelMarginLoss](https://pytorch.org/docs/stable/nn.html#multilabelmarginloss)
 
-Lost a lot of work time 
-[Moving] Must catch up.
-
 _________________________________________________________________________________________________
 
-
-##### Week Jul 27 - Jul 31
+##### Week Jul 27 
 
 ASAP Sample Example - prototyping layers
-
 _________________________________________________________________________________________________
+
+##### Significant Update
+
+Experiments with One-Shot-Tests repo.
+
+
 
 
 ### Resources and References 
