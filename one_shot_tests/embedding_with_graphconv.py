@@ -56,8 +56,9 @@ train_samples = 100
 test_samples  = 10
 input_classes = 10
 
-plot_folder_name = 'event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)
-plot_path        = './plots/'+plot_folder_name+'/'
+plot_dir_root = './results/'
+plot_dir_name = 'event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)
+plot_path        = plot_dir_root+plot_dir_name+'/'
 
 input_dim  = 3
 hidden_dim = 32
@@ -724,6 +725,8 @@ def test(data, model):
 
 if __name__ == "__main__":
 
+    if not os.path.exists(plot_dir_root):
+        os.makedirs(plot_dir_root)
     if not os.path.exists(plot_path):
         os.makedirs(plot_path)
 
@@ -771,7 +774,7 @@ if __name__ == "__main__":
 
 
     logtofile(plot_path, logfile_name, '\nStart time: '+datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-    logtofile(plot_path, logfile_name, "\nCONFIG: {}\nEpochs:{}\nEvents:{}\nTracks: {}".format(plot_folder_name, total_epochs, train_samples, input_classes))
+    logtofile(plot_path, logfile_name, "\nCONFIG: {}\nEpochs:{}\nEvents:{}\nTracks: {}".format(plot_dir_name, total_epochs, train_samples, input_classes))
     logtofile(plot_path, logfile_name, "MODEL:\nInputDim={}\nHiddenDim={}\nOutputDim={}\ninterm_out={}\nNcatsOut={}\nNPropsOut={}\nConvDepth={}\nKNN_k={}\nEdgeNetDepth={}".format(
                                                 input_dim,hidden_dim,output_dim,interm_out,ncats_out,nprops_out,conv_depth,k,edgecat_depth))
     logtofile(plot_path, logfile_name, "LEARNING RATE:\nParamgp1:{:.3e}\nParamgp2:{:.3e}\nParamgp3:{:.3e}".format(lr_param_gp_1, lr_param_gp_2, lr_param_gp_3))
@@ -807,10 +810,10 @@ if __name__ == "__main__":
         ax2.set_ylabel("Losses")
         ax2.legend()
 
-        plt.title(plot_folder_name)
-        ax1.set_title(plot_folder_name+': indivudual losses')
-        ax2.set_title(plot_folder_name+': combined loss')
-        plt.savefig(plot_path + plot_folder_name+'_Learning_curve.pdf')
+        plt.title(plot_dir_name)
+        ax1.set_title(plot_dir_name+': indivudual losses')
+        ax2.set_title(plot_dir_name+': combined loss')
+        plt.savefig(plot_path + plot_dir_name+'_Learning_curve.pdf')
         plt.close(fig)
 
         # pdb.set_trace()
