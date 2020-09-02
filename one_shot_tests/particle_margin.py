@@ -338,7 +338,6 @@ class TrackMLParticleTrackingDataset(Dataset):
 
         return edge_indices
 
-
     def compute_y_index(self, edge_indices, particle):
         # print("Constructing y Index")
         pid1 = [ particle[i].item() for i in edge_indices[0] ]
@@ -349,8 +348,6 @@ class TrackMLParticleTrackingDataset(Dataset):
                 y[i] = 1
 
         return torch.from_numpy(y)
-
-
 
     def split_detector_sections(self, pos, layer, particle, eta, particle_label, phi_edges, eta_edges):
         pos_sect, layer_sect, particle_sect, particle_label_sect = [], [], [], []
@@ -420,7 +417,6 @@ class TrackMLParticleTrackingDataset(Dataset):
         true_pt = torch.from_numpy(tps['pt'].values)
         true_eta = torch.from_numpy(tps['eta'].values)
         true_phi = torch.from_numpy(tps['phi'].values)
-
 
         tracks = torch.empty(0, dtype=torch.long)
         if(self.tracking):
