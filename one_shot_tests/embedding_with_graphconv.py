@@ -1,5 +1,6 @@
 '''Python imports'''
 import os
+import shutil
 import numpy as np
 import awkward as ak
 from math import sqrt
@@ -47,18 +48,22 @@ ctr = 0
 SET CONFIG / Move to Config File 
 --------------------------------
 '''
+load_checkpoint_path = False
 
 data_root    = '/home/csharma/prototyping/data/train_1_/'
 logfile_name = 'training.log'
 
 total_epochs  = 3000
-train_samples = 100
-test_samples  = 10
+train_samples = 500
+test_samples  = 50
 input_classes = 10
 
-plot_dir_root = './results/'
-plot_dir_name = 'event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)
-plot_path        = plot_dir_root+plot_dir_name+'/'
+plot_dir_root   = './plots/'
+plot_dir_name   = 'event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)
+plot_path       = plot_dir_root+plot_dir_name+'/'
+
+checkpoint_dir  = './checkpoints/'
+checkpoint_path = checkpoint_dir+plot_dir_name
 
 input_dim  = 3
 hidden_dim = 32
@@ -70,7 +75,7 @@ nprops_out = 1
 
 conv_depth = 3
 k          = 8 
-edgecat_depth = 6 # TRY DEPTH==3
+edgecat_depth = 6  # TRY DEPTH==3,tried - kills edgenet's performance
 make_plots   = True
 make_test_plots = True
 
@@ -85,6 +90,23 @@ def logtofile(path, filename, logs):
     logfile.write(logs)
     logfile.write('\n')
     logfile.close()
+
+def save_checkpoint(model_state, is_best, checkpoint_dir, checkpoint_name):
+    f_path = os.path.join(checkpoint_dir,checkpoint_name + '_checkpoint.pt')
+    torch.save(model_state, f_path)
+    if is_best:
+        best_fpath = os.path.join(checkpoint_dir, 'best_model_checkpoint.pt')
+        shutil.copyfile(f_path, best_fpath)
+
+def load_checkpoint(load_checkpoint_path, model, optimizer, scheduler):
+
+    checkpoint = torch.load(load_checkpoint_path)
+    model.load_state_dict(checkpoint['state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer'])
+    scheduler.load_state_dict(checkpoint['scheduler'])
+
+    return model, optimizer, scheduler, checkpoint['epoch'], checkpoint['converged_categorizer'], \
+                                    checkpoint['converged_embedding'], checkpoint['best_loss'] 
 
 def simple_embedding_truth(coords, truth_label_by_hits, device='cpu'):
     truth_ordering = torch.argsort(truth_label_by_hits)    
@@ -381,6 +403,7 @@ class SimpleEmbeddingNetwork(nn.Module):
         return out, edge_scores, edge_index, cluster_map, cluster_props, cluster_batch
 
 def load_data(root_path, samples):
+    print('Loading data ...')
     data = TrackMLParticleTrackingDataset(root=root_path,
                                         layer_pairs_plus=True,
                                         pt_min=0,
@@ -407,12 +430,10 @@ def plot_event(my_data,y_t):
     ctr = ctr%10
     plt.close(fig)
 
-def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, lr_threshold_1, lr_threshold_2):
+def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, \
+          lr_threshold_1, lr_threshold_2, converged_embedding, converged_categorizer, start_epoch, best_loss):
 
     model.train()
-
-    converged_embedding = False
-    converged_categorizer = False
 
     combo_loss_avg = []
     sep_loss_avg = []
@@ -427,7 +448,7 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
 
     t1 = timer()
     
-    for epoch in range(total_epochs):
+    for epoch in range(start_epoch, start_epoch+total_epochs):
         
         '''book-keeping'''
         sep_loss_track = np.zeros((train_samples,3), dtype=np.float)
@@ -445,9 +466,9 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
             opt.param_groups[1]['lr'] = lr_threshold_1
             opt.param_groups[2]['lr'] = lr_threshold_2
             
-        # if opt.param_groups[1]['lr'] < lr_threshold_1 and not converged_categorizer and converged_embedding:
-        #     converged_categorizer = True
-        #     opt.param_groups[2]['lr'] = lr_threshold_2
+        if opt.param_groups[1]['lr'] < lr_threshold_1 and not converged_categorizer and converged_embedding:
+            converged_categorizer = True
+            opt.param_groups[2]['lr'] = lr_threshold_2
         
 
         for idata, d in enumerate(data[0:train_samples]):            
@@ -455,13 +476,12 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
             d_gpu = d.to('cuda')
             y_orig = d_gpu.y
 
-            d_gpu.x = d_gpu.x[d_gpu.y < input_classes] # just take the first three tracks
+            d_gpu.x = d_gpu.x[d_gpu.y < input_classes] 
             d_gpu.x = (d_gpu.x - torch.min(d_gpu.x, axis=0).values)/(torch.max(d_gpu.x, axis=0).values - torch.min(d_gpu.x, axis=0).values) # Normalise
             d_gpu.y_particle_barcodes = d_gpu.y_particle_barcodes[d_gpu.y < input_classes]
             d_gpu.y = d_gpu.y[d_gpu.y < input_classes]
             # plot_event(d_gpu.x.detach().cpu().numpy(), d_gpu.y.detach().cpu().numpy())
             
-
             '''
             project embedding to some 2d latent space where it is seperable using the deep model
             compute edge net scores and seperated cluster properties with the ebedding
@@ -510,7 +530,7 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
 
             '''Plot Training Clusters'''
             # if (make_plots==True):
-            if (make_plots==True and (epoch==0 or epoch==total_epochs-1) and idata%(train_samples/10)==0):     
+            if (make_plots==True and (epoch==0 or epoch==start_epoch+total_epochs-1) and idata%(train_samples/10)==0):     
                 fig = plt.figure(figsize=(8,8))
                 if output_dim==3:
                     ax = fig.add_subplot(111, projection='3d')
@@ -518,7 +538,7 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
                         ax.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                             coords[d_gpu.y == i,1].detach().cpu().numpy(),
                             coords[d_gpu.y == i,2].detach().cpu().numpy(),
-                            color=color_cycle[(i*k)%(train_samples*k - 1)], marker = marker_hits[i%6], s=100);
+                            color=color_cycle[(i*k)%(train_samples*k - 1)], marker = marker_hits[i%6], s=100)
 
                         ax.scatter(centers[i,0].detach().cpu().numpy(), 
                             centers[i,1].detach().cpu().numpy(), 
@@ -548,22 +568,38 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
         combo_loss_avg.append(avg_loss_track.mean())
         sep_loss_avg.append([sep_loss_track[:,0].mean(), sep_loss_track[:,1].mean(), sep_loss_track[:,2].mean()])
 
-        if((epoch%100==0 or epoch==total_epochs-1)):
+
+        if(epoch%10==0 or epoch==start_epoch or epoch==start_epoch+total_epochs-1):
             '''Per Epoch Stats'''
             print('--------------------')
             print("Epoch: {}\nLosses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
-                    epoch,combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+                    epoch,combo_loss_avg[epoch-start_epoch],sep_loss_avg[epoch-start_epoch][0],sep_loss_avg[epoch-start_epoch][1],sep_loss_avg[epoch-start_epoch][2]))
             print("LR: opt.param_groups \n[0]: {:.9e}  \n[1]: {:.9e}  \n[2]: {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
             print("[TRAIN] Average Edge Accuracies over {} events: {:.5e}".format(train_samples,edge_acc_track.mean()) )
         
-            if(epoch==total_epochs-1 or epoch==0):
+            if(epoch==start_epoch+total_epochs-1 or epoch==start_epoch):
                 logtofile(plot_path, logfile_name, "Epoch: {}\nLosses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
-                    epoch,combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+                    epoch,combo_loss_avg[epoch-start_epoch],sep_loss_avg[epoch-start_epoch][0],sep_loss_avg[epoch-start_epoch][1],sep_loss_avg[epoch-start_epoch][2]))
                 logtofile(plot_path, logfile_name,"LR: opt.param_groups \n[0]: {:.9e}  \n[1]: {:.9e}  \n[2]: {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
                 logtofile(plot_path, logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(train_samples, input_classes,edge_acc_track.mean()) )                    
                 # logtofile(plot_path, logfile_name,'Properties:\n')
                 # logtofile(plot_path, logfile_name,str(pred_cluster_properties))
                 logtofile(plot_path, logfile_name,'--------------------------')
+
+            if(combo_loss_avg[epoch-start_epoch] < best_loss):
+                best_loss = combo_loss_avg[epoch-start_epoch]
+                is_best = True
+                checkpoint = {
+                    'epoch': epoch+1,
+                    'state_dict': model.state_dict(),
+                    'optimizer': opt.state_dict(),
+                    'scheduler': sched.state_dict(),
+                    'converged_embedding':False,
+                    'converged_categorizer':False,
+                    'best_loss':best_loss
+                }
+                checkpoint_name = 'event'+str(train_samples)+'_classes' + str(input_classes) + '_epoch'+str(epoch) + '_loss' + '{:.5e}'.format(combo_loss_avg[epoch-start_epoch]) + '_edgeAcc' + '{:.5e}'.format(edge_acc_track.mean())
+                save_checkpoint(checkpoint, is_best, checkpoint_path, checkpoint_name)
 
         '''Update Weights'''
         opt.step()
@@ -579,7 +615,7 @@ def train(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, 
 
     return combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties
 
-def test(data, model):
+def testing(data, model):
 
     model.eval()
 
@@ -700,7 +736,7 @@ def test(data, model):
                 plt.savefig(plot_path+'test_plot_'+'_ex_'+str(idata)+'.pdf')   
                 plt.close(fig)
         
-        '''track Epoch Updates'''
+        '''track test Updates'''
         combo_loss_avg.append(avg_loss_track.mean())
         sep_loss_avg.append([sep_loss_track[:,0].mean(), sep_loss_track[:,1].mean(), sep_loss_track[:,2].mean()])
 
@@ -725,10 +761,18 @@ def test(data, model):
 
 if __name__ == "__main__":
 
+    '''Plots'''
     if not os.path.exists(plot_dir_root):
         os.makedirs(plot_dir_root)
     if not os.path.exists(plot_path):
         os.makedirs(plot_path)
+
+    '''Checkpoint'''
+    if not os.path.exists(checkpoint_dir):
+        os.makedirs(checkpoint_dir)
+    if not os.path.exists(checkpoint_path):
+        os.makedirs(checkpoint_path)    
+
 
     '''Load Data'''
     data = load_data(data_root, train_samples+test_samples)
@@ -750,7 +794,7 @@ if __name__ == "__main__":
     lr_threshold_1    = 1e-4 #5e-3
     lr_threshold_2    = 7.5e-4 #1e-3
 
-    lr_param_gp_1     = 2.5e-3
+    lr_param_gp_1     = 5e-3
     lr_param_gp_2     = 0   
     lr_param_gp_3     = 0  
 
@@ -775,20 +819,35 @@ if __name__ == "__main__":
 
     logtofile(plot_path, logfile_name, '\nStart time: '+datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
     logtofile(plot_path, logfile_name, "\nCONFIG: {}\nEpochs:{}\nEvents:{}\nTracks: {}".format(plot_dir_name, total_epochs, train_samples, input_classes))
-    logtofile(plot_path, logfile_name, "MODEL:\nInputDim={}\nHiddenDim={}\nOutputDim={}\ninterm_out={}\nNcatsOut={}\nNPropsOut={}\nConvDepth={}\nKNN_k={}\nEdgeNetDepth={}".format(
+    logtofile(plot_path, logfile_name, "MODEL:\nInputDim={}\nHiddenDim={}\nOutputDim={}\ninterm_out={}\nNcatsOut={}\nNPropsOut={}\nConvDepth={}\nKNN_k={}\nEdgeCatDepth={}".format(
                                                 input_dim,hidden_dim,output_dim,interm_out,ncats_out,nprops_out,conv_depth,k,edgecat_depth))
     logtofile(plot_path, logfile_name, "LEARNING RATE:\nParamgp1:{:.3e}\nParamgp2:{:.3e}\nParamgp3:{:.3e}".format(lr_param_gp_1, lr_param_gp_2, lr_param_gp_3))
     logtofile(plot_path, logfile_name, "threshold_1={:.3e}\nthreshold_2={:.3e}\n".format(lr_threshold_1, lr_threshold_2))
 
 
+    converged_embedding = False
+    converged_categorizer = False
+    start_epoch = 0
+    best_loss = np.inf
+
+    if (load_checkpoint_path != False):
+
+        model, opt, sched, start_epoch, converged_categorizer, converged_embedding, best_loss = \
+                                            load_checkpoint(load_checkpoint_path, model, opt, sched)
+
+        print('\nloaded checkpoint:')
+        print('\tstart_epoch :',start_epoch)
+        print('\tbest_loss   :',best_loss)
+        logtofile(plot_path, logfile_name, '\nloaded checkpoint with start epoch {} and loss {} \n'.format(start_epoch,best_loss))
 
     ''' Train '''
-    combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties = train(data, model, opt, sched, \
+    combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties = training(data, model, opt, sched, \
                                                                         lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, \
-                                                                        lr_threshold_1, lr_threshold_2)
+                                                                        lr_threshold_1, lr_threshold_2, converged_embedding, \
+                                                                        converged_categorizer, start_epoch, best_loss)
 
     ''' Test '''
-    test_combo_loss_avg, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties = test(data, model)    
+    test_combo_loss_avg, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties = testing(data, model)    
 
 
     '''Learning Curve / Clusters / Centers'''
@@ -797,15 +856,15 @@ if __name__ == "__main__":
         '''Plot Learning Curve'''
         fig = plt.figure(figsize=(20,10))
         ax1 = fig.add_subplot(121)
-        ax1.plot(np.arange(total_epochs), [x[0] for x in sep_loss_avg], color='brown', linewidth=1, label="Hinge")
-        ax1.plot(np.arange(total_epochs), [x[1] for x in sep_loss_avg], color='green', linewidth=1, label="CrossEntropy")
+        ax1.plot(np.arange(start_epoch, start_epoch+total_epochs), [x[0] for x in sep_loss_avg], color='brown', linewidth=1, label="Hinge")
+        ax1.plot(np.arange(start_epoch, start_epoch+total_epochs), [x[1] for x in sep_loss_avg], color='green', linewidth=1, label="CrossEntropy")
         ax1.set_xlabel("Epochs")
         ax1.set_ylabel("Losses")
         ax1.legend()
 
         ax2 = fig.add_subplot(122)
-        ax2.plot(np.arange(total_epochs), [x[2] for x in sep_loss_avg], color='olive', linewidth=1, label="MSE")
-        ax2.plot(np.arange(total_epochs), combo_loss_avg, color='red', linewidth=2, label="Combined")
+        ax2.plot(np.arange(start_epoch, start_epoch+total_epochs), [x[2] for x in sep_loss_avg], color='olive', linewidth=1, label="MSE")
+        ax2.plot(np.arange(start_epoch, start_epoch+total_epochs), combo_loss_avg, color='red', linewidth=2, label="Combined")
         ax2.set_xlabel("Epochs")
         ax2.set_ylabel("Losses")
         ax2.legend()
