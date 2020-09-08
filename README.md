@@ -124,8 +124,8 @@ ________________________________________________________________________________
 
 ##### Significant Update
 
-Experiments with end-to-end recondtruction/segmentation/regression model design, with a simpler dataset for proof of concept. 
-Dataset: [kaggle](https://www.kaggle.com/c/trackml-particle-identification/overview)
+Experiments with end-to-end reconstruction/segmentation/regression model design, with a simpler dataset for proof of concept. \
+Dataset: [kaggle page](https://www.kaggle.com/c/trackml-particle-identification/overview)\
 Experiments: [one_shot_tests](one_shot_tests/embedding_with_graphconv.py)
 
 
