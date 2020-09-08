@@ -16,14 +16,7 @@ Archive:\
 ### Index
 - [Summary](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#summary)
 - [Tentative Roadmap](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#tentative-roadmap)
-- [Week Jun 29](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jun-29)
-- [Week Jun 6](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-6)
-- [Week Jul 13](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-13)
-- [Week Jul 20](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-20)
-- [Week Jul 27](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#week-jul-27)
-- [A Significant Week](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#significant-update)
 - [Resources and References](https://github.com/chhavisharma/hgcal-reco/blob/master/README.md#resources-and-references)
-
 
 <!---
 ### Execution
@@ -70,66 +63,6 @@ ________________________________________________________________________________
         - Attention/ transformer based single shot GNN
         - Draw from Object Condensation (by Jan K.)
         - ASAP - Supervised clustering without a limit on K
-
-_________________________________________________________________________________________________
-
-### Update Tracking
-
-
-##### Week Jun 29
- 
-Exisitng Pipeline: Graph Neural Networks are used to model raw HGCal data into particle shower clusters in these 4 categories.
-  - 0 Noise
-  - 1 Hadrons: ...
-  - 2 EM Particles: ...
-  - 3 Mips: ...
-
-<p align="center"> Existing Pipeline </p>
-<p align="center">
-  <img src="images/ExistingPipeline.png"/>
-</p>  
-
-_________________________________________________________________________________________________
-
-##### Week Jul 6 
-
-Re-training EdgeNet
-Re-training Dynamic Reduction Net
-
-
-<p align="center"> Existing Pipeline </p>
-<p align="center">
-  <img src="images/EdgeNetTraining.png"/>
-</p>  
-
-_________________________________________________________________________________________________
-
-##### Week Jul 13 
-Hyperparameter Tuning
-Optimal Neighbours for Graph CNN Accumulation
-Optimal number of Pooling Layers
-Mean pool v/s Avg Pool 
-
-_________________________________________________________________________________________________
-
-##### Week Jul 20 
-Paper Discussion - [ASAP](https://arxiv.org/abs/1911.07979) with [MultiLabelMarginLoss](https://pytorch.org/docs/stable/nn.html#multilabelmarginloss)
-
-_________________________________________________________________________________________________
-
-##### Week Jul 27 
-
-ASAP Sample Example - prototyping layers
-_________________________________________________________________________________________________
-
-##### Significant Update
-
-Experiments with end-to-end reconstruction/segmentation/regression model design, with a simpler dataset for proof of concept. \
-Dataset: [kaggle page](https://www.kaggle.com/c/trackml-particle-identification/overview)\
-Experiments: [one_shot_tests](one_shot_tests/embedding_with_graphconv.py)
-
-
-
 
 ### Resources and References 
 0. The standard Model https://home.cern/science/physics/standard-model 
