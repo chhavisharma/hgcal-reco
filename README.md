@@ -116,7 +116,9 @@ ________________________________________________________________________________
 
 ##### Significant Update
 
-Experiments with One-Shot-Tests repo.
+Experiments with end-to-end recondtruction/segmentation/regression model design, with a simpler dataset for proof of concept. 
+Dataset: [kaggle](https://www.kaggle.com/c/trackml-particle-identification/overview)
+Experiments: [one_shot_tests](one_shot_tests/embedding_with_graphconv.py)
 
 
 
