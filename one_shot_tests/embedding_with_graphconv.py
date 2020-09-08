@@ -32,7 +32,7 @@ from torch_geometric.utils.undirected import to_undirected
 from torch_geometric.nn import EdgeConv
 from torch_geometric.typing import OptTensor, PairTensor
 
-'''File imports'''
+'''File Imports'''
 from particle_margin import TrackMLParticleTrackingDataset
 
 '''Globals'''
@@ -848,6 +848,17 @@ if __name__ == "__main__":
 
     ''' Test '''
     test_combo_loss_avg, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties = testing(data, model)    
+
+
+    '''Save Losses'''
+    training_dict = {  
+        'Combined_loss':combo_loss_avg,
+        'Seperate_loss':sep_loss_avg,
+        'Edge_Accuracies': edge_acc_track,
+        'Pred_cluster_prop':pred_cluster_properties
+    }
+    with open(plot_path+'/training.pickle', 'wb') as handle:
+        pickle.dump(training_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
 
     '''Learning Curve / Clusters / Centers'''
