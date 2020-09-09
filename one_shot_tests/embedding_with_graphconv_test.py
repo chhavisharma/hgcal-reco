@@ -48,7 +48,7 @@ data_root    = '/home/csharma/prototyping/data/train_1_/'
 logfile_name = 'testing.log'
 
 train_samples = 500
-test_samples  = 50
+test_samples  = 1000
 input_classes = 10
 
 plot_dir_root   = './plots/'
@@ -67,7 +67,7 @@ nprops_out = 1
 conv_depth = 3
 k          = 8 
 edgecat_depth = 6  
-make_test_plots = True
+make_test_plots = False
 
 
 def logtofile(path, filename, logs):
@@ -551,7 +551,7 @@ def testing(data, model):
     t2 = timer()
 
     print("Testing Complted in {:.5f}mins.\n".format((t2-t1)/60.0))
-    return combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties
+    return combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties, sep_loss_track
 
 if __name__ == "__main__":
 
@@ -580,7 +580,8 @@ if __name__ == "__main__":
 
 
     print('[TEST CONFIG]')
-    print('Samples  : ', train_samples)
+    print('Train Samples : ', train_samples)
+    print('Test Samples  : ', test_samples)
     print('TrackKind: ', input_classes)
     print('InputdDim: ', input_dim)
     print('HiddenDim: ', hidden_dim)
@@ -602,8 +603,38 @@ if __name__ == "__main__":
     logtofile(plot_path, logfile_name, '\nloaded checkpoint with start epoch {} and loss {} \n'.format(start_epoch,best_loss))
 
     ''' Test '''
-    test_combo_loss_avg, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties = testing(data, model)    
+    test_combo_loss_avg, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties, test_sep_loss_track = testing(data, model)    
 
     # pdb.set_trace()
+    colors = ['#E69F00', '#56B4E9', '#F0E442', '#009E73', '#D55E00']
+    fig = plt.figure(figsize=(20,10))
+    ax1 = fig.add_subplot(131)
+    ax1.hist(test_sep_loss_track[:,0], color=colors[1], label="Hinge Loss Per Example")
+    ax1.set_xlabel("Loss")
+    ax1.set_ylabel("Examples")
+    ax1.legend()
+
+    ax2 = fig.add_subplot(132)
+    ax2.hist(test_sep_loss_track[:,1], color=colors[3], label="EdgeCE Loss Per Example")
+    ax2.set_xlabel("Loss")
+    ax2.set_ylabel("Examples")
+    ax2.legend()
+
+    ax3 = fig.add_subplot(133)
+    ax3.hist(test_edge_acc_track, color=colors[4], label="EdgeClsf Acc Per Example")
+    ax3.set_xlabel("Acc")
+    ax3.set_ylabel("Examples")
+    ax3.legend()
+
+    pdb.set_trace()
+    ax1.set_title('Hinge Loss Dist: Avg='+str('{:.3e}'.format(test_sep_loss_avg[0][0])))
+    ax2.set_title('EdgeCE Loss Dist: Avg='+str('{:.3e}'.format(test_sep_loss_avg[0][1])))
+    ax3.set_title('Edge Acc Dist: Avg='+str('{:.3e}'.format(test_edge_acc_track.mean())))
+    # plt.title(plot_dir_name)
+    # fig.title(plot_dir_name)
+    plt.savefig(plot_path+plot_dir_name+'_Loss_distributions.pdf')
+    plt.close(fig)    
+
+
     print('EXIT.')
 
