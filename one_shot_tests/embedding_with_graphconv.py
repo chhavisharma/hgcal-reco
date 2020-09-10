@@ -52,7 +52,7 @@ SET CONFIG / Move to Config File
 '''
 load_checkpoint_path = False
 
-data_root    = '/home/csharma/prototyping/data/train_1_/'
+data_root    = '~/prototyping/data/train_1_/'
 logfile_name = 'training.log'
 
 total_epochs  = 3000
@@ -67,16 +67,19 @@ plot_path       = plot_dir_root+plot_dir_name+'/'
 checkpoint_dir  = './checkpoints/'
 checkpoint_path = checkpoint_dir+plot_dir_name
 
+# Embedding Dim
 input_dim  = 3
 hidden_dim = 32
 interm_out = None
 output_dim = 2
 
+# Regressor and Classifier Output Dim
 ncats_out  = 2
 nprops_out = 1
 
-conv_depth = 3
-k          = 8 
+# EdgeCat Settings
+k             = 8 
+conv_depth    = 3
 edgecat_depth = 6  # TRY DEPTH==3,tried - kills edgenet's performance
 make_plots   = True
 make_test_plots = True

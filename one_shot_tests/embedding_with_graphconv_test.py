@@ -44,31 +44,34 @@ cmap = cm.hot
 m = cm.ScalarMappable(norm=norm, cmap=cmap)
 ctr = 0
 
-load_checkpoint_path = '/home/csharma/workspace/hgcal-reco/one_shot_tests/checkpoints/event500_epoch3000_classes10' + '/best_model_checkpoint.pt'
-data_root    = '/home/csharma/prototyping/data/train_1_/'
+load_checkpoint_path = './checkpoints/event500_epoch3000_classes10' + '/best_model_checkpoint.pt'
+data_root    = '~/prototyping/data/train_1_/'
 logfile_name = 'testing.log'
 
 train_samples = 500
-test_samples  = 50
+test_samples  = 500
 input_classes = 10
 
 plot_dir_root   = './plots/'
 plot_dir_name   = 'test_event'+str(test_samples)+'_classes'+str(input_classes)
 plot_path       = plot_dir_root+plot_dir_name+'/'
 
+# Embedding Dim
 input_dim  = 3
 hidden_dim = 32
 interm_out = None
 output_dim = 2
 
+# Regressor and Classifier output dim
 ncats_out  = 2
 nprops_out = 1
 
-conv_depth = 3
-k          = 8 
+# EdgeCat Settings
+k             = 8 
+conv_depth    = 3
 edgecat_depth = 6  
-make_test_plots = False
 
+make_test_plots = False
 
 def logtofile(path, filename, logs):
     filepath = path + '/'+ filename
@@ -84,7 +87,7 @@ def logtofile(path, filename, logs):
 def load_checkpoint(load_checkpoint_path, model):
 
     checkpoint = torch.load(load_checkpoint_path)
-    model.load_state_dict(checkpoint['state_dict'])
+    # model.load_state_dict(checkpoint['state_dict'])
 
     return model, checkpoint['epoch'], checkpoint['best_loss'] 
 
@@ -418,7 +421,6 @@ def testing(data, model):
     sep_loss_avg = []
     pred_cluster_properties = []
     edge_acc_track = np.zeros(test_samples, dtype=np.float)
-    edge_acc_conf = np.zeros((test_samples,2,2), dtype=np.int)
     
     
     color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,input_classes*k))
@@ -429,6 +431,7 @@ def testing(data, model):
 
     t1 = timer()
     epoch=0
+    blunder_count = 0
 
     with torch.no_grad():
         
@@ -436,6 +439,7 @@ def testing(data, model):
         sep_loss_track = np.zeros((test_samples,3), dtype=np.float)
         avg_loss_track = np.zeros(test_samples, dtype=np.float)
         edge_acc_track = np.zeros(test_samples, dtype=np.float)
+        edge_acc_conf = np.zeros((test_samples,ncats_out,ncats_out), dtype=np.int)
         pred_cluster_properties = []
         avg_loss = 0
         
@@ -496,7 +500,10 @@ def testing(data, model):
             pred_prop = cluster_props[pred_cluster_match].squeeze().detach().cpu().numpy()
             pred_cluster_properties.append([1/true_prop,1/pred_prop])
 
-            edge_acc_conf[idata,:,:] = confusion_matrix(y_edgecat.detach().cpu().numpy(), torch.argmax(edge_scores, dim=1).detach().cpu().numpy())
+            preds = torch.argmax(edge_scores, dim=1).detach().cpu().numpy()
+            blunder_count = blunder_count + (preds==2).sum()
+            preds[preds==2]=0
+            edge_acc_conf[idata,:2,:2] = confusion_matrix(y_edgecat.detach().cpu().numpy(), preds)
 
             '''Plot test clusters'''
             if (make_test_plots==True):
@@ -547,7 +554,9 @@ def testing(data, model):
         print("[TEST] Average Edge Accuracies over {} events: {:.5e}".format(test_samples,edge_acc_track.mean()) )
         print("Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
         print("Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))
-        
+        print("Blunder COunt is this class 2 predicitons ->",blunder_count)
+
+
         logtofile(plot_path, logfile_name,'\nTEST:')
         logtofile(plot_path, logfile_name, "Losses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
                                                                 combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
@@ -602,6 +611,8 @@ if __name__ == "__main__":
     print('HiddenDim: ', hidden_dim)
     print('OutputDim: ', output_dim)
     print('IntermOut: ', interm_out)
+    print('NCatsOut : ', ncats_out)
+    print('NPropOut : ', nprops_out)
     print('Model Parameters :',  sum(p.numel() for p in model.parameters() if p.requires_grad))
 
 
