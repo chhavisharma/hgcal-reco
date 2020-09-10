@@ -11,6 +11,8 @@ import matplotlib.pyplot as plt
 from  mpl_toolkits import mplot3d
 from typing import List
 from sklearn.metrics import confusion_matrix
+from os.path import expanduser
+home = expanduser("~")
 
 # from IPython import display
 import time
@@ -45,7 +47,7 @@ m = cm.ScalarMappable(norm=norm, cmap=cmap)
 ctr = 0
 
 load_checkpoint_path = './checkpoints/event500_epoch3000_classes10' + '/best_model_checkpoint.pt'
-data_root    = '~/prototyping/data/train_1_/'
+data_root    = home+'/prototyping/data/train_1_/'
 logfile_name = 'testing.log'
 
 train_samples = 500
@@ -87,7 +89,7 @@ def logtofile(path, filename, logs):
 def load_checkpoint(load_checkpoint_path, model):
 
     checkpoint = torch.load(load_checkpoint_path)
-    # model.load_state_dict(checkpoint['state_dict'])
+    model.load_state_dict(checkpoint['state_dict'])
 
     return model, checkpoint['epoch'], checkpoint['best_loss'] 
 

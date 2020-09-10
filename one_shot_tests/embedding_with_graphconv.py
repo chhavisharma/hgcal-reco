@@ -12,6 +12,8 @@ from  mpl_toolkits import mplot3d
 from typing import List
 import pickle
 from sklearn.metrics import confusion_matrix
+from os.path import expanduser
+home = expanduser("~")
 
 # from IPython import display
 import time
@@ -52,7 +54,7 @@ SET CONFIG / Move to Config File
 '''
 load_checkpoint_path = False
 
-data_root    = '~/prototyping/data/train_1_/'
+data_root    = home+'/prototyping/data/train_1_/'
 logfile_name = 'training.log'
 
 total_epochs  = 3000
