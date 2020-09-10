@@ -10,6 +10,7 @@ import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 from  mpl_toolkits import mplot3d
 from typing import List
+from sklearn.metrics import confusion_matrix
 
 # from IPython import display
 import time
@@ -48,20 +49,19 @@ data_root    = '/home/csharma/prototyping/data/train_1_/'
 logfile_name = 'testing.log'
 
 train_samples = 500
-test_samples  = 1000
+test_samples  = 50
 input_classes = 10
 
 plot_dir_root   = './plots/'
 plot_dir_name   = 'test_event'+str(test_samples)+'_classes'+str(input_classes)
 plot_path       = plot_dir_root+plot_dir_name+'/'
 
-
 input_dim  = 3
 hidden_dim = 32
 interm_out = None
 output_dim = 2
 
-ncats_out  = 3
+ncats_out  = 2
 nprops_out = 1
 
 conv_depth = 3
@@ -418,6 +418,7 @@ def testing(data, model):
     sep_loss_avg = []
     pred_cluster_properties = []
     edge_acc_track = np.zeros(test_samples, dtype=np.float)
+    edge_acc_conf = np.zeros((test_samples,2,2), dtype=np.int)
     
     
     color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,input_classes*k))
@@ -495,6 +496,8 @@ def testing(data, model):
             pred_prop = cluster_props[pred_cluster_match].squeeze().detach().cpu().numpy()
             pred_cluster_properties.append([1/true_prop,1/pred_prop])
 
+            edge_acc_conf[idata,:,:] = confusion_matrix(y_edgecat.detach().cpu().numpy(), torch.argmax(edge_scores, dim=1).detach().cpu().numpy())
+
             '''Plot test clusters'''
             if (make_test_plots==True):
                 
@@ -531,18 +534,30 @@ def testing(data, model):
         '''track test Updates'''
         combo_loss_avg.append(avg_loss_track.mean())
         sep_loss_avg.append([sep_loss_track[:,0].mean(), sep_loss_track[:,1].mean(), sep_loss_track[:,2].mean()])
+        
+        true_0_1 = edge_acc_conf.sum(axis=2)
+        pred_0_1 = edge_acc_conf.sum(axis=1) 
+        total_true_0_1 =   true_0_1.sum(axis=0)
+        total_pred_0_1 =   pred_0_1.sum(axis=0)
 
         '''Test Stats'''
         print('--------------------')
         print("Losses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
                 combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
         print("[TEST] Average Edge Accuracies over {} events: {:.5e}".format(test_samples,edge_acc_track.mean()) )
-
+        print("Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
+        print("Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))
+        
         logtofile(plot_path, logfile_name,'\nTEST:')
         logtofile(plot_path, logfile_name, "Losses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
                                                                 combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
         logtofile(plot_path, logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(test_samples,input_classes,edge_acc_track.mean()) )                    
-        logtofile(plot_path, logfile_name,'Properties:')
+        pdb.set_trace()
+        total_0 = edge_acc_conf.sum()
+        logtofile(plot_path, logfile_name,'Total Edge Stats:\nTrue_0: {} \tTrue_1: {}\nPred_0: {} \tPred_1: {}'.format())
+        logtofile(plot_path, logfile_name,"Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
+        logtofile(plot_path, logfile_name,"Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))        
+        logtofile(plot_path, logfile_name,'\nProperties:')
         logtofile(plot_path, logfile_name,str(pred_cluster_properties))
         logtofile(plot_path, logfile_name,'--------------------------')
 
@@ -551,7 +566,7 @@ def testing(data, model):
     t2 = timer()
 
     print("Testing Complted in {:.5f}mins.\n".format((t2-t1)/60.0))
-    return combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties, sep_loss_track
+    return combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties, sep_loss_track, edge_acc_conf
 
 if __name__ == "__main__":
 
@@ -603,9 +618,8 @@ if __name__ == "__main__":
     logtofile(plot_path, logfile_name, '\nloaded checkpoint with start epoch {} and loss {} \n'.format(start_epoch,best_loss))
 
     ''' Test '''
-    test_combo_loss_avg, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties, test_sep_loss_track = testing(data, model)    
+    test_combo_loss_avg, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties, test_sep_loss_track, edge_acc_conf = testing(data, model)    
 
-    # pdb.set_trace()
     colors = ['#E69F00', '#56B4E9', '#F0E442', '#009E73', '#D55E00']
     fig = plt.figure(figsize=(20,10))
     ax1 = fig.add_subplot(131)
@@ -636,5 +650,7 @@ if __name__ == "__main__":
     plt.close(fig)    
 
 
+
+    pdb.set_trace()
     print('EXIT.')
 
