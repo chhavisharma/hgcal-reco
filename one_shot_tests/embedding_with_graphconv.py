@@ -1,6 +1,5 @@
 '''Python imports'''
 import os
-import shutil
 import numpy as np
 import awkward as ak
 from math import sqrt
@@ -33,51 +32,20 @@ from torch_geometric.utils.undirected import to_undirected
 from torch_geometric.nn import EdgeConv
 from torch_geometric.typing import OptTensor, PairTensor
 
-
 '''File Imports'''
 import config
+from utils import logtofile, save_checkpoint, load_checkpoint
 from particle_margin import TrackMLParticleTrackingDataset
 from model import SimpleEmbeddingNetwork
-
 
 '''Globals'''
 torch.manual_seed(1)
 color_range = mpl.colors.Normalize(vmin=-20, vmax=10)
 cmap = cm.hot
 m = cm.ScalarMappable(norm=color_range, cmap=cmap)
-ctr = 0
 
 '''Data Norm'''
 data_norm = torch.tensor([1./70., 1./5., 1./400.])
-
-
-def logtofile(path, filename, logs):
-    filepath = path + '/'+ filename
-    if os.path.exists(filepath):
-        append_write = 'a' # append if already exists
-    else:
-        append_write = 'w'
-    logfile = open(filepath,append_write)
-    logfile.write(logs)
-    logfile.write('\n')
-    logfile.close()
-
-def save_checkpoint(model_state, is_best, checkpoint_dir, checkpoint_name):
-    f_path = os.path.join(checkpoint_dir,checkpoint_name + '_checkpoint.pt')
-    torch.save(model_state, f_path)
-    if is_best:
-        best_fpath = os.path.join(checkpoint_dir, 'best_model_checkpoint.pt')
-        shutil.copyfile(f_path, best_fpath)
-
-def load_checkpoint(load_checkpoint_path, model, optimizer, scheduler):
-
-    checkpoint = torch.load(config.load_checkpoint_path)
-    model.load_state_dict(checkpoint['state_dict'])
-    optimizer.load_state_dict(checkpoint['optimizer'])
-    scheduler.load_state_dict(checkpoint['scheduler'])
-
-    return model, optimizer, scheduler, checkpoint['epoch'], checkpoint['converged_categorizer'], \
-                                    checkpoint['converged_embedding'], checkpoint['best_loss'] 
 
 def simple_embedding_truth(coords, truth_label_by_hits, device='cpu'):
     truth_ordering = torch.argsort(truth_label_by_hits)    
@@ -178,25 +146,6 @@ def load_data(root_path, samples):
                                         n_events=samples, n_workers=1)
     print('{} events read.'.format(data))
     return data
-
-def plot_event(my_data,y_t):
-
-    x,y,z = my_data[:,0], my_data[:,1], my_data[:,2]
-
-    fig = plt.figure(figsize = (15, 10)) 
-    ax1 = fig.add_subplot(111,projection='3d')
-    
-    #Axis 1 - hits 
-    ax1.set_xlabel('Z-axis', fontweight ='bold')  
-    ax1.set_ylabel('Y-axis', fontweight ='bold')  
-    ax1.set_zlabel('X-axis', fontweight ='bold')  
-    ax1.scatter3D(z, y, x, s=10, color= m.to_rgba(y_t), edgecolors='black')      
-
-    global ctr
-    plt.savefig(config.plot_path+'event_'+str(ctr)+'.pdf') 
-    ctr = ctr+1
-    ctr = ctr%10
-    plt.close(fig)
 
 def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, \
           lr_threshold_1, lr_threshold_2, converged_embedding, converged_categorizer, start_epoch, best_loss):
