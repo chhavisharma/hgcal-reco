@@ -171,7 +171,8 @@ class SimpleEmbeddingNetwork(nn.Module):
 
 
         '''KNN(k neighbors) over Embedding2 features''' 
-        edge_index = knn_graph(out, self.k, batch, loop=False, flow=ec.flow)
+        # edge_index = knn_graph(out, self.k, batch, loop=False, flow=ec.flow)
+        edge_index = radius_graph(out, r=0.5, batch=batch, loop=False)
         
         ''' 
         use Embedding1 to build an edge classifier
