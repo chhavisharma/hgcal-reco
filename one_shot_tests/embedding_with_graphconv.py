@@ -12,10 +12,7 @@ from  mpl_toolkits import mplot3d
 from typing import List
 import pickle
 from sklearn.metrics import confusion_matrix
-from os.path import expanduser
-home = expanduser("~")
 
-# from IPython import display
 import time
 from datetime import datetime
 from timeit import default_timer as timer
@@ -36,55 +33,22 @@ from torch_geometric.utils.undirected import to_undirected
 from torch_geometric.nn import EdgeConv
 from torch_geometric.typing import OptTensor, PairTensor
 
+
 '''File Imports'''
+import config
 from particle_margin import TrackMLParticleTrackingDataset
+from model import SimpleEmbeddingNetwork
+
 
 '''Globals'''
 torch.manual_seed(1)
-norm = torch.tensor([1./70., 1./5., 1./400.])
-norm = mpl.colors.Normalize(vmin=-20, vmax=10)
+color_range = mpl.colors.Normalize(vmin=-20, vmax=10)
 cmap = cm.hot
-m = cm.ScalarMappable(norm=norm, cmap=cmap)
+m = cm.ScalarMappable(norm=color_range, cmap=cmap)
 ctr = 0
 
-
-'''
-SET CONFIG / Move to Config File 
---------------------------------
-'''
-load_checkpoint_path = False
-
-data_root    = home+'/prototyping/data/train_1_/'
-logfile_name = 'training.log'
-
-total_epochs  = 3000
-train_samples = 100
-test_samples  = 100
-input_classes = 10
-
-plot_dir_root   = './plots/'
-plot_dir_name   = 'train_event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)
-plot_path       = plot_dir_root+plot_dir_name+'/'
-
-checkpoint_dir  = './checkpoints/'
-checkpoint_path = checkpoint_dir+plot_dir_name
-
-# Embedding Dim
-input_dim  = 3
-hidden_dim = 32
-interm_out = None
-output_dim = 2
-
-# Regressor and Classifier Output Dim
-ncats_out  = 2
-nprops_out = 1
-
-# EdgeCat Settings
-k             = 8 
-conv_depth    = 3
-edgecat_depth = 6  # TRY DEPTH==3,tried - kills edgenet's performance
-make_plots   = True
-make_test_plots = True
+'''Data Norm'''
+data_norm = torch.tensor([1./70., 1./5., 1./400.])
 
 
 def logtofile(path, filename, logs):
@@ -107,7 +71,7 @@ def save_checkpoint(model_state, is_best, checkpoint_dir, checkpoint_name):
 
 def load_checkpoint(load_checkpoint_path, model, optimizer, scheduler):
 
-    checkpoint = torch.load(load_checkpoint_path)
+    checkpoint = torch.load(config.load_checkpoint_path)
     model.load_state_dict(checkpoint['state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
@@ -206,209 +170,6 @@ def match_cluster_targets(clusters, truth_clusters, data):
     #print('match_cluster_targets')
     return pred_indices, y_properties ## Also predict Eta-Phi
 
-class SimpleEmbeddingNetwork(nn.Module):
-    def __init__(self, input_dim=5, hidden_dim=16, ncats_out=2, nprops_out=1, output_dim=8,
-                 conv_depth=3, edgecat_depth=6, property_depth=3, k=8, aggr='add',
-                 norm=torch.tensor([1./500., 1./500., 1./54., 1/25., 1./1000.]), interm_out=6):
-        super(SimpleEmbeddingNetwork, self).__init__()
-        
-        # self.datanorm = nn.Parameter(norm, requires_grad=False)
-        self.k = k
-        
-        start_width = 2 * (hidden_dim )
-        middle_width = (3 * hidden_dim ) // 2
-        
-        '''Main Input Net'''
-        # embedding loss
-        self.inputnet =  nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ELU(),
-            #nn.LayerNorm(hidden_dim),
-            nn.BatchNorm1d(num_features=hidden_dim),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ELU(),
-            #nn.LayerNorm(hidden_dim),
-            nn.BatchNorm1d(num_features=hidden_dim)
-        )        
-        
-        '''Main Edge Convolution'''
-        self.edgeconvs = nn.ModuleList()
-        for i in range(conv_depth):
-            convnn = nn.Sequential(
-                nn.Linear(start_width, middle_width),
-                nn.ELU(),
-                nn.Linear(middle_width, middle_width),                                             
-                nn.ELU(),
-                nn.Linear(middle_width, hidden_dim),                                             
-                nn.ELU(),
-                #nn.LayerNorm(hidden_dim),
-                nn.BatchNorm1d(num_features=hidden_dim)
-            )
-            self.edgeconvs.append(EdgeConv(nn=convnn, aggr=aggr))
-        
-        
-        '''Embedding Output Net'''
-        self.output = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ELU(),
-            #nn.LayerNorm(hidden_dim),
-            nn.BatchNorm1d(num_features=hidden_dim),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ELU(),
-            nn.Linear(hidden_dim, output_dim)
-            # nn.Linear(hidden_dim, interm_out)
-        )
-        # self.plotlayer = nn.Sequential(
-        #     nn.Linear(interm_out, interm_out),
-        #     nn.ELU(),
-        #     nn.Linear(interm_out, output_dim))
-
-        
-        # edge categorization
-        '''InputNetCat'''
-        self.inputnet_cat =  nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),            
-            nn.Tanh(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.BatchNorm1d(num_features=hidden_dim),
-            nn.Tanh(),            
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.BatchNorm1d(num_features=hidden_dim),
-            nn.Tanh()            
-        )
-        
-        '''EdgeConcat Convolution'''
-        self.edgecatconvs = nn.ModuleList()
-        for i in range(edgecat_depth):
-            convnn = nn.Sequential(
-                nn.Linear(start_width + 2*hidden_dim + 2*input_dim, middle_width),
-                nn.ELU(),
-                nn.Linear(middle_width, hidden_dim),                                             
-                nn.ELU(),
-                nn.BatchNorm1d(num_features=hidden_dim)
-            )
-            self.edgecatconvs.append(EdgeConv(nn=convnn, aggr=aggr))
-        
-        '''Edge Classifier'''
-        self.edge_classifier = nn.Sequential(
-            nn.Linear(2*hidden_dim, hidden_dim),
-            nn.ELU(),
-            nn.BatchNorm1d(num_features=hidden_dim),
-            nn.Linear(hidden_dim, hidden_dim//2),
-            nn.ELU(),
-            nn.BatchNorm1d(num_features=hidden_dim//2),
-            nn.Linear(hidden_dim//2, ncats_out)
-        )
-        
-        '''InputNet for Cluster Properties'''
-        self.inputnet_prop =  nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),            
-            nn.Tanh(),
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.BatchNorm1d(num_features=hidden_dim),
-            nn.Tanh(),            
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.BatchNorm1d(num_features=hidden_dim),
-            nn.Tanh()            
-        )
-        
-        '''Convolution for Cluster Properties'''
-        self.propertyconvs = nn.ModuleList()
-        for i in range(property_depth):
-            convnn = nn.Sequential(
-                nn.Linear(start_width + 2*hidden_dim + 2*input_dim, middle_width),
-                nn.ELU(),
-                nn.Linear(middle_width, hidden_dim),                                             
-                nn.ELU(),
-                nn.BatchNorm1d(num_features=hidden_dim)
-            )
-            self.propertyconvs.append(EdgeConv(nn=convnn, aggr='max'))
-
-        '''Classifier for Cluster Properties'''
-        self.property_predictor = nn.Sequential(
-            nn.Linear(hidden_dim, hidden_dim),
-            nn.ELU(),
-            nn.Linear(hidden_dim, hidden_dim//2),
-            nn.ELU(),
-            nn.Linear(hidden_dim//2, nprops_out)
-        )        
-
-    def forward(self, x, batch: OptTensor=None):
-        
-        if batch is None:
-            batch = torch.zeros(x.size()[0], dtype=torch.int64, device=x.device)
-        
-        '''Embedding1: Intermediate Latent space features (hiddenDim)'''
-        x_emb = self.inputnet(x)   
-
-        '''KNN(k neighbors) over intermediate Latent space features'''     
-        for ec in self.edgeconvs:
-            edge_index = knn_graph(x_emb, self.k, batch, loop=False, flow=ec.flow)
-            x_emb = x_emb + ec(x_emb, edge_index)
-    
-        '''
-        [1]
-        Embedding2: Final Latent Space embedding coords from x,y,z to ncats_out
-        '''
-        out = self.output(x_emb)
-        #plot = self.plotlayer(out)
-
-
-        '''KNN(k neighbors) over Embedding2 features''' 
-        edge_index = knn_graph(out, self.k, batch, loop=False, flow=ec.flow)
-        
-        ''' 
-        use Embedding1 to build an edge classifier
-        inputnet_cat is residual to inputnet
-        '''
-        x_cat = self.inputnet_cat(x) + x_emb
-
-        '''
-        [2]
-        Compute Edge Categories Convolution over Embedding1
-        '''
-        for ec in self.edgecatconvs:            
-            x_cat = x_cat + ec(torch.cat([x_cat, x_emb, x], dim=1), edge_index)
-        
-        edge_scores = self.edge_classifier(torch.cat([x_cat[edge_index[0]], 
-                                                      x_cat[edge_index[1]]], 
-                                                      dim=1)).squeeze()
-        
-
-        '''
-        use the predicted graph to generate disjoint subgraphs
-        these are our physics objects
-        '''
-        objects = UnionFind(x.size()[0])
-        good_edges = edge_index[:,torch.argmax(edge_scores, dim=1) > 0]
-        good_edges_cpu = good_edges.cpu().numpy() 
-
-        for edge in good_edges_cpu.T:
-            objects.union(edge[0],edge[1])
-        cluster_map = torch.from_numpy(np.array([objects.find(i) for i in range(x.shape[0])], 
-                                                dtype=np.int64)).to(x.device)
-        cluster_roots, inverse = torch.unique(cluster_map, return_inverse=True)
-        # remap roots to [0, ..., nclusters-1]
-        cluster_map = torch.arange(cluster_roots.size()[0], 
-                                   dtype=torch.int64, 
-                                   device=x.device)[inverse]
-        
-
-        ''' 
-        [3]
-        use Embedding1 to learn segmented cluster properties 
-        inputnet_cat is residual to inputnet
-        '''
-        x_prop = self.inputnet_prop(x) + x_emb
-        # now we accumulate over all selected disjoint subgraphs
-        # to define per-object properties
-        for ec in self.propertyconvs:
-            x_prop = x_prop + ec(torch.cat([x_prop, x_emb, x], dim=1), good_edges)        
-        props_pooled, cluster_batch = max_pool_x(cluster_map, x_prop, batch)
-        cluster_props = self.property_predictor(props_pooled)    
-
-        return out, edge_scores, edge_index, cluster_map, cluster_props, cluster_batch
-
 def load_data(root_path, samples):
     print('Loading data ...')
     data = TrackMLParticleTrackingDataset(root=root_path,
@@ -432,7 +193,7 @@ def plot_event(my_data,y_t):
     ax1.scatter3D(z, y, x, s=10, color= m.to_rgba(y_t), edgecolors='black')      
 
     global ctr
-    plt.savefig(plot_path+'event_'+str(ctr)+'.pdf') 
+    plt.savefig(config.plot_path+'event_'+str(ctr)+'.pdf') 
     ctr = ctr+1
     ctr = ctr%10
     plt.close(fig)
@@ -445,9 +206,9 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
     combo_loss_avg = []
     sep_loss_avg = []
     pred_cluster_properties = []
-    edge_acc_track = np.zeros(train_samples, dtype=np.float)
+    edge_acc_track = np.zeros(config.train_samples, dtype=np.float)
     
-    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,input_classes*k))
+    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,config.input_classes*config.k))
     marker_hits =    ['^','v','s','h','<','>']
     marker_centers = ['+','1','x','3','2','4']
 
@@ -455,39 +216,36 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
 
     t1 = timer()
     
-    for epoch in range(start_epoch, start_epoch+total_epochs):
+    for epoch in range(start_epoch, start_epoch+config.total_epochs):
         
         '''book-keeping'''
-        sep_loss_track = np.zeros((train_samples,3), dtype=np.float)
-        avg_loss_track = np.zeros(train_samples, dtype=np.float)
-        edge_acc_track = np.zeros(train_samples, dtype=np.float)
-        edge_acc_conf  = np.zeros((train_samples,ncats_out,ncats_out), dtype=np.int)
+        sep_loss_track = np.zeros((config.train_samples,3), dtype=np.float)
+        avg_loss_track = np.zeros(config.train_samples, dtype=np.float)
+        edge_acc_track = np.zeros(config.train_samples, dtype=np.float)
+        edge_acc_conf  = np.zeros((config.train_samples,config.ncats_out,config.ncats_out), dtype=np.int)
         pred_cluster_properties = []
         avg_loss = 0
-        
-        if make_plots:
-            plt.clf()
 
         opt.zero_grad()
-        if opt.param_groups[0]['lr'] < lr_threshold_1 and not converged_embedding:
-            converged_embedding = True
-            opt.param_groups[1]['lr'] = lr_threshold_1
-            opt.param_groups[2]['lr'] = lr_threshold_2
+        # if opt.param_groups[0]['lr'] < lr_threshold_1 and not converged_embedding:
+        #     converged_embedding = True
+        #     opt.param_groups[1]['lr'] = lr_threshold_1
+        #     opt.param_groups[2]['lr'] = lr_threshold_2
             
-        if opt.param_groups[1]['lr'] < lr_threshold_1 and not converged_categorizer and converged_embedding:
-            converged_categorizer = True
-            opt.param_groups[2]['lr'] = lr_threshold_2
+        # if opt.param_groups[1]['lr'] < lr_threshold_1 and not converged_categorizer and converged_embedding:
+        #     converged_categorizer = True
+        #     opt.param_groups[2]['lr'] = lr_threshold_2
         
 
-        for idata, d in enumerate(data[0:train_samples]):            
+        for idata, d in enumerate(data[0:config.train_samples]):            
             
             d_gpu = d.to('cuda')
             y_orig = d_gpu.y
 
-            d_gpu.x = d_gpu.x[d_gpu.y < input_classes] 
+            d_gpu.x = d_gpu.x[d_gpu.y < config.input_classes] 
             d_gpu.x = (d_gpu.x - torch.min(d_gpu.x, axis=0).values)/(torch.max(d_gpu.x, axis=0).values - torch.min(d_gpu.x, axis=0).values) # Normalise
-            d_gpu.y_particle_barcodes = d_gpu.y_particle_barcodes[d_gpu.y < input_classes]
-            d_gpu.y = d_gpu.y[d_gpu.y < input_classes]
+            d_gpu.y_particle_barcodes = d_gpu.y_particle_barcodes[d_gpu.y < config.input_classes]
+            d_gpu.y = d_gpu.y[d_gpu.y < config.input_classes]
             # plot_event(d_gpu.x.detach().cpu().numpy(), d_gpu.y.detach().cpu().numpy())
             
             '''
@@ -539,36 +297,36 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
             pred_cluster_properties.append([1/true_prop,1/pred_prop])
 
             '''Plot Training Clusters'''
-            # if (make_plots==True):
-            if (make_plots==True and (epoch==0 or epoch==start_epoch+total_epochs-1) and idata%(train_samples/10)==0):     
+            # if (config.make_plots==True):
+            if (config.make_plots==True and (epoch==0 or epoch==start_epoch+config.total_epochs-1) and idata%(config.train_samples/10)==0):     
                 fig = plt.figure(figsize=(8,8))
-                if output_dim==3:
+                if config.output_dim==3:
                     ax = fig.add_subplot(111, projection='3d')
                     for i in range(centers.size()[0]):  
                         ax.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                             coords[d_gpu.y == i,1].detach().cpu().numpy(),
                             coords[d_gpu.y == i,2].detach().cpu().numpy(),
-                            color=color_cycle[(i*k)%(train_samples*k - 1)], marker = marker_hits[i%6], s=100)
+                            color=color_cycle[(i*config.k)%(config.train_samples*config.k - 1)], marker = marker_hits[i%6], s=100)
 
                         ax.scatter(centers[i,0].detach().cpu().numpy(), 
                             centers[i,1].detach().cpu().numpy(), 
                             centers[i,2].detach().cpu().numpy(), 
-                            marker=marker_centers[i%6], color=color_cycle[(i*k)%(train_samples*k - 1)], s=100); 
-                elif output_dim==2:
+                            marker=marker_centers[i%6], color=color_cycle[(i*config.k)%(config.train_samples*config.k - 1)], s=100); 
+                elif config.output_dim==2:
                     for i in range(int(centers.size()[0])):
                             plt.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                                         coords[d_gpu.y == i,1].detach().cpu().numpy(),
-                                        color=color_cycle[(i*k)%(train_samples*k - 1)], 
+                                        color=color_cycle[(i*config.k)%(config.train_samples*config.k - 1)], 
                                         marker = marker_hits[i%6] )
 
                             plt.scatter(centers[i,0].detach().cpu().numpy(), 
                                         centers[i,1].detach().cpu().numpy(), 
-                                        color=color_cycle[(i*k)%(train_samples*k - 1)],  
+                                        color=color_cycle[(i*config.k)%(config.train_samples*config.k - 1)],  
                                         edgecolors='b',
                                         marker=marker_centers[i%6]) 
         
                 plt.title('train_plot_epoch_'+str(epoch)+'_ex_'+str(idata)+'_EdgeAcc_'+str('{:.5e}'.format(edge_accuracy)))
-                plt.savefig(plot_path+'train_plot_epoch_'+str(epoch)+'_ex_'+str(idata)+'.pdf')   
+                plt.savefig(config.plot_path+'train_plot_epoch_'+str(epoch)+'_ex_'+str(idata)+'.pdf')   
                 plt.close(fig)
 
             '''Loss Backward''' 
@@ -585,26 +343,26 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
         # print('true_0_1:',true_0_1)
         # pdb.set_trace()
 
-        if(epoch%10==0 or epoch==start_epoch or epoch==start_epoch+total_epochs-1):
+        if(epoch%10==0 or epoch==start_epoch or epoch==start_epoch+config.total_epochs-1):
             '''Per Epoch Stats'''
             print('--------------------')
             print("Epoch: {}\nLosses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
                     epoch,combo_loss_avg[epoch-start_epoch],sep_loss_avg[epoch-start_epoch][0],sep_loss_avg[epoch-start_epoch][1],sep_loss_avg[epoch-start_epoch][2]))
             print("LR: opt.param_groups \n[0]: {:.9e}  \n[1]: {:.9e}  \n[2]: {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
-            print("[TRAIN] Average Edge Accuracies over {} events: {:.5e}".format(train_samples,edge_acc_track.mean()) )
+            print("[TRAIN] Average Edge Accuracies over {} events: {:.5e}".format(config.train_samples,edge_acc_track.mean()) )
             print("Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
             print("Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))
         
-            if(epoch==start_epoch+total_epochs-1 or epoch==start_epoch):
-                logtofile(plot_path, logfile_name, "Epoch: {}\nLosses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
+            if(epoch==start_epoch+config.total_epochs-1 or epoch==start_epoch):
+                logtofile(config.plot_path, config.logfile_name, "Epoch: {}\nLosses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
                     epoch,combo_loss_avg[epoch-start_epoch],sep_loss_avg[epoch-start_epoch][0],sep_loss_avg[epoch-start_epoch][1],sep_loss_avg[epoch-start_epoch][2]))
-                logtofile(plot_path, logfile_name,"LR: opt.param_groups \n[0]: {:.9e}  \n[1]: {:.9e}  \n[2]: {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
-                logtofile(plot_path, logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(train_samples, input_classes,edge_acc_track.mean()) )                    
-                logtofile(plot_path, logfile_name,"Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
-                logtofile(plot_path, logfile_name,"Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))                
-                # logtofile(plot_path, logfile_name,'Properties:\n')
-                # logtofile(plot_path, logfile_name,str(pred_cluster_properties))
-                logtofile(plot_path, logfile_name,'--------------------------')
+                logtofile(config.plot_path, config.logfile_name,"LR: opt.param_groups \n[0]: {:.9e}  \n[1]: {:.9e}  \n[2]: {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
+                logtofile(config.plot_path, config.logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(config.train_samples, config.input_classes,edge_acc_track.mean()) )                    
+                logtofile(config.plot_path, config.logfile_name,"Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
+                logtofile(config.plot_path, config.logfile_name,"Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))                
+                # logtofile(config.plot_path, config.logfile_name,'Properties:\n')
+                # logtofile(config.plot_path, config.logfile_name,str(pred_cluster_properties))
+                logtofile(config.plot_path, config.logfile_name,'--------------------------')
 
             if(combo_loss_avg[epoch-start_epoch] < best_loss):
                 best_loss = combo_loss_avg[epoch-start_epoch]
@@ -618,8 +376,8 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
                     'converged_categorizer':False,
                     'best_loss':best_loss
                 }
-                checkpoint_name = 'event'+str(train_samples)+'_classes' + str(input_classes) + '_epoch'+str(epoch) + '_loss' + '{:.5e}'.format(combo_loss_avg[epoch-start_epoch]) + '_edgeAcc' + '{:.5e}'.format(edge_acc_track.mean())
-                save_checkpoint(checkpoint, is_best, checkpoint_path, checkpoint_name)
+                checkpoint_name = 'event'+str(config.train_samples)+'_classes' + str(config.input_classes) + '_epoch'+str(epoch) + '_loss' + '{:.5e}'.format(combo_loss_avg[epoch-start_epoch]) + '_edgeAcc' + '{:.5e}'.format(edge_acc_track.mean())
+                save_checkpoint(checkpoint, is_best, config.checkpoint_path, checkpoint_name)
 
         '''Update Weights'''
         opt.step()
@@ -642,10 +400,10 @@ def testing(data, model):
     combo_loss_avg     = []
     sep_loss_avg = []
     pred_cluster_properties = []
-    edge_acc_track = np.zeros(test_samples, dtype=np.float)
+    edge_acc_track = np.zeros(config.test_samples, dtype=np.float)
     
     
-    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,input_classes*k))
+    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,config.input_classes*config.k))
     marker_hits =    ['^','v','s','h','<','>']
     marker_centers = ['+','1','x','3','2','4']
 
@@ -657,25 +415,25 @@ def testing(data, model):
     with torch.no_grad():
         
         '''book-keeping'''
-        sep_loss_track = np.zeros((test_samples,3), dtype=np.float)
-        avg_loss_track = np.zeros(test_samples, dtype=np.float)
-        edge_acc_track = np.zeros(test_samples, dtype=np.float)
-        edge_acc_conf  = np.zeros((test_samples,ncats_out,ncats_out), dtype=np.int)
+        sep_loss_track = np.zeros((config.test_samples,3), dtype=np.float)
+        avg_loss_track = np.zeros(config.test_samples, dtype=np.float)
+        edge_acc_track = np.zeros(config.test_samples, dtype=np.float)
+        edge_acc_conf  = np.zeros((config.test_samples,config.ncats_out,config.ncats_out), dtype=np.int)
         pred_cluster_properties = []
         avg_loss = 0
         
-        if make_plots:
+        if config.make_plots:
             plt.clf()
 
-        for idata, d in enumerate(data[train_samples:train_samples+test_samples]):            
+        for idata, d in enumerate(data[config.train_samples:config.train_samples+config.test_samples]):            
             
             d_gpu = d.to('cuda')
             y_orig = d_gpu.y
 
-            d_gpu.x = d_gpu.x[d_gpu.y < input_classes] # just take the first three tracks
+            d_gpu.x = d_gpu.x[d_gpu.y < config.input_classes] # just take the first three tracks
             d_gpu.x = (d_gpu.x - torch.min(d_gpu.x, axis=0).values)/(torch.max(d_gpu.x, axis=0).values - torch.min(d_gpu.x, axis=0).values) # Normalise
-            d_gpu.y_particle_barcodes = d_gpu.y_particle_barcodes[d_gpu.y < input_classes]
-            d_gpu.y = d_gpu.y[d_gpu.y < input_classes]
+            d_gpu.y_particle_barcodes = d_gpu.y_particle_barcodes[d_gpu.y < config.input_classes]
+            d_gpu.y = d_gpu.y[d_gpu.y < config.input_classes]
 
             '''
             project data to some 2d plane where it is seperable usinfg the deep model
@@ -727,36 +485,36 @@ def testing(data, model):
             pred_cluster_properties.append([1/true_prop,1/pred_prop])
 
             '''Plot test clusters'''
-            if (make_test_plots==True):
+            if (config.make_test_plots==True):
                 
                 fig = plt.figure(figsize=(8,8))
-                if output_dim==3:
+                if config.output_dim==3:
                     ax = fig.add_subplot(111, projection='3d')
                     for i in range(centers.size()[0]):  
                         ax.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                             coords[d_gpu.y == i,1].detach().cpu().numpy(),
                             coords[d_gpu.y == i,2].detach().cpu().numpy(),
-                            color=color_cycle[(i*k)%(test_samples*k - 1)], marker = marker_hits[i%6], s=100);
+                            color=color_cycle[(i*config.k)%(config.test_samples*config.k - 1)], marker = marker_hits[i%6], s=100);
 
                         ax.scatter(centers[i,0].detach().cpu().numpy(), 
                             centers[i,1].detach().cpu().numpy(), 
                             centers[i,2].detach().cpu().numpy(), 
-                            marker=marker_centers[i%6], color=color_cycle[(i*k)%(test_samples*k - 1)], s=100); 
-                elif output_dim==2:
+                            marker=marker_centers[i%6], color=color_cycle[(i*config.k)%(config.test_samples*config.k - 1)], s=100); 
+                elif config.output_dim==2:
                     for i in range(int(centers.size()[0])):
                             plt.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                                         coords[d_gpu.y == i,1].detach().cpu().numpy(),
-                                        color=color_cycle[(i*k)%(test_samples*k - 1)], 
+                                        color=color_cycle[(i*config.k)%(config.test_samples*config.k - 1)], 
                                         marker = marker_hits[i%6] )
 
                             plt.scatter(centers[i,0].detach().cpu().numpy(), 
                                         centers[i,1].detach().cpu().numpy(), 
-                                        color=color_cycle[(i*k)%(test_samples*k - 1)],  
+                                        color=color_cycle[(i*config.k)%(config.test_samples*config.k - 1)],  
                                         edgecolors='b',
                                         marker=marker_centers[i%6]) 
         
                 plt.title('test_plot_'+'_ex_'+str(idata)+'_EdgeAcc_'+str('{:.5e}'.format(edge_accuracy)))
-                plt.savefig(plot_path+'test_plot_'+'_ex_'+str(idata)+'.pdf')   
+                plt.savefig(config.plot_path+'test_plot_'+'_ex_'+str(idata)+'.pdf')   
                 plt.close(fig)
         
         '''track test Updates'''
@@ -772,19 +530,19 @@ def testing(data, model):
         print('--------------------')
         print("Losses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
                 combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
-        print("[TEST] Average Edge Accuracies over {} events: {:.5e}".format(test_samples,edge_acc_track.mean()) )
+        print("[TEST] Average Edge Accuracies over {} events: {:.5e}".format(config.test_samples,edge_acc_track.mean()) )
         print("Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
         print("Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))
         
-        logtofile(plot_path, logfile_name,'\nTEST:')
-        logtofile(plot_path, logfile_name, "Losses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
+        logtofile(config.plot_path, config.logfile_name,'\nTEST:')
+        logtofile(config.plot_path, config.logfile_name, "Losses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
                                                                 combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
-        logtofile(plot_path, logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(test_samples,input_classes,edge_acc_track.mean()) )                    
-        logtofile(plot_path, logfile_name,"Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
-        logtofile(plot_path, logfile_name,"Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))
-        logtofile(plot_path, logfile_name,'\nProperties:')
-        logtofile(plot_path, logfile_name,str(pred_cluster_properties))
-        logtofile(plot_path, logfile_name,'--------------------------')
+        logtofile(config.plot_path, config.logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(config.test_samples,config.input_classes,edge_acc_track.mean()) )                    
+        logtofile(config.plot_path, config.logfile_name,"Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
+        logtofile(config.plot_path, config.logfile_name,"Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))
+        logtofile(config.plot_path, config.logfile_name,'\nProperties:')
+        logtofile(config.plot_path, config.logfile_name,str(pred_cluster_properties))
+        logtofile(config.plot_path, config.logfile_name,'--------------------------')
 
     t2 = timer()
 
@@ -794,38 +552,39 @@ def testing(data, model):
 if __name__ == "__main__":
 
     '''Plots'''
-    if not os.path.exists(plot_dir_root):
-        os.makedirs(plot_dir_root)
-    if not os.path.exists(plot_path):
-        os.makedirs(plot_path)
+    if not os.path.exists(config.plot_dir_root):
+        os.makedirs(config.plot_dir_root)
+    if not os.path.exists(config.plot_path):
+        os.makedirs(config.plot_path)
 
     '''Checkpoint'''
-    if not os.path.exists(checkpoint_dir):
-        os.makedirs(checkpoint_dir)
-    if not os.path.exists(checkpoint_path):
-        os.makedirs(checkpoint_path)    
+    if not os.path.exists(config.checkpoint_dir):
+        os.makedirs(config.checkpoint_dir)
+    if not os.path.exists(config.checkpoint_path):
+        os.makedirs(config.checkpoint_path)    
 
 
     '''Load Data'''
-    data = load_data(data_root, train_samples+test_samples)
+    data = load_data(config.data_root, config.train_samples+config.test_samples)
 
     '''Load Model'''
-    model = SimpleEmbeddingNetwork(input_dim=input_dim, 
-                                hidden_dim=hidden_dim, 
-                                output_dim=output_dim,
-                                ncats_out=ncats_out,
-                                nprops_out=nprops_out,
-                                conv_depth=conv_depth, 
-                                edgecat_depth=edgecat_depth, 
-                                k=k, 
+    model = SimpleEmbeddingNetwork(input_dim=config.input_dim, 
+                                hidden_dim=config.hidden_dim, 
+                                output_dim=config.output_dim,
+                                ncats_out=config.ncats_out,
+                                nprops_out=config.nprops_out,
+                                conv_depth=config.conv_depth, 
+                                edgecat_depth=config.edgecat_depth, 
+                                k=config.k, 
                                 aggr='add',
-                                norm=norm,
-                                interm_out=interm_out
+                                norm=data_norm,
+                                interm_out=config.interm_out
                                 ).to('cuda')
     
+    '''Not used a tthe moment'''
     lr_threshold_1    = 1e-4 #5e-3
     lr_threshold_2    = 7.5e-4 #1e-3
-
+    
     lr_param_gp_1     = 5e-3
     lr_param_gp_2     = 0   
     lr_param_gp_3     = 0  
@@ -839,25 +598,25 @@ if __name__ == "__main__":
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.70, patience=30)
 
     print('[CONFIG]')
-    print('Epochs   : ', total_epochs)
-    print('Samples  : ', train_samples)
-    print('TrackKind: ', input_classes)
-    print('InputdDim: ', input_dim)
-    print('HiddenDim: ', hidden_dim)
-    print('OutputDim: ', output_dim)
-    print('IntermOut: ', interm_out)
-    print('NCatsOut : ', ncats_out)
-    print('NPropOut : ', nprops_out)
+    print('Epochs   : ', config.total_epochs)
+    print('Samples  : ', config.train_samples)
+    print('TrackKind: ', config.input_classes)
+    print('InputdDim: ', config.input_dim)
+    print('HiddenDim: ', config.hidden_dim)
+    print('OutputDim: ', config.output_dim)
+    print('IntermOut: ', config.interm_out)
+    print('NCatsOut : ', config.ncats_out)
+    print('NPropOut : ', config.nprops_out)
 
     print('Model Parameters (trainable):',  sum(p.numel() for p in model.parameters() if p.requires_grad))
 
 
-    logtofile(plot_path, logfile_name, '\nStart time: '+datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-    logtofile(plot_path, logfile_name, "\nCONFIG: {}\nEpochs:{}\nEvents:{}\nTracks: {}".format(plot_dir_name, total_epochs, train_samples, input_classes))
-    logtofile(plot_path, logfile_name, "MODEL:\nInputDim={}\nHiddenDim={}\nOutputDim={}\ninterm_out={}\nNcatsOut={}\nNPropsOut={}\nConvDepth={}\nKNN_k={}\nEdgeCatDepth={}".format(
-                                                input_dim,hidden_dim,output_dim,interm_out,ncats_out,nprops_out,conv_depth,k,edgecat_depth))
-    logtofile(plot_path, logfile_name, "LEARNING RATE:\nParamgp1:{:.3e}\nParamgp2:{:.3e}\nParamgp3:{:.3e}".format(lr_param_gp_1, lr_param_gp_2, lr_param_gp_3))
-    logtofile(plot_path, logfile_name, "threshold_1={:.3e}\nthreshold_2={:.3e}\n".format(lr_threshold_1, lr_threshold_2))
+    logtofile(config.plot_path, config.logfile_name, '\nStart time: '+datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
+    logtofile(config.plot_path, config.logfile_name, "\nCONFIG: {}\nEpochs:{}\nEvents:{}\nTracks: {}".format(config.plot_dir_name, config.total_epochs, config.train_samples, config.input_classes))
+    logtofile(config.plot_path, config.logfile_name, "MODEL:\nInputDim={}\nHiddenDim={}\nOutputDim={}\nconfig.interm_out={}\nNcatsOut={}\nNPropsOut={}\nConvDepth={}\nKNN_k={}\nEdgeCatDepth={}".format(
+                                                config.input_dim,config.hidden_dim,config.output_dim,config.interm_out,config.ncats_out,config.nprops_out,config.conv_depth,config.k,config.edgecat_depth))
+    logtofile(config.plot_path, config.logfile_name, "LEARNING RATE:\nParamgp1:{:.3e}\nParamgp2:{:.3e}\nParamgp3:{:.3e}".format(lr_param_gp_1, lr_param_gp_2, lr_param_gp_3))
+    logtofile(config.plot_path, config.logfile_name, "threshold_1={:.3e}\nthreshold_2={:.3e}\n".format(lr_threshold_1, lr_threshold_2))
 
 
     converged_embedding = False
@@ -865,15 +624,15 @@ if __name__ == "__main__":
     start_epoch = 0
     best_loss = np.inf
 
-    if (load_checkpoint_path != False):
+    if (config.load_checkpoint_path != False):
 
         model, opt, sched, start_epoch, converged_categorizer, converged_embedding, best_loss = \
-                                            load_checkpoint(load_checkpoint_path, model, opt, sched)
+                                            load_checkpoint(config.load_checkpoint_path, model, opt, sched)
 
         print('\nloaded checkpoint:')
         print('\tstart_epoch :',start_epoch)
         print('\tbest_loss   :',best_loss)
-        logtofile(plot_path, logfile_name, '\nloaded checkpoint with start epoch {} and loss {} \n'.format(start_epoch,best_loss))
+        logtofile(config.plot_path, config.logfile_name, '\nloaded checkpoint with start epoch {} and loss {} \n'.format(start_epoch,best_loss))
 
     ''' Train '''
     combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties, edge_acc_conf = training(data, model, opt, sched, \
@@ -893,7 +652,7 @@ if __name__ == "__main__":
         'Pred_cluster_prop':pred_cluster_properties,
         'Edge_acc_conf_matrix':edge_acc_conf
     }
-    with open(plot_path+'/training.pickle', 'wb') as handle:
+    with open(config.plot_path+'/training.pickle', 'wb') as handle:
         pickle.dump(training_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     testing_dict = {  
@@ -903,57 +662,30 @@ if __name__ == "__main__":
         'Pred_cluster_prop':test_pred_cluster_properties,
         'Edge_acc_conf_matrix':test_edge_acc_conf
     }
-    with open(plot_path+'/testing.pickle', 'wb') as handle:
+    with open(config.plot_path+'/testing.pickle', 'wb') as handle:
         pickle.dump(training_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     '''Learning Curve / Clusters / Centers'''
-    if(make_plots==True):
+    if(config.make_plots==True):
 
         '''Plot Learning Curve'''
         fig = plt.figure(figsize=(20,10))
         ax1 = fig.add_subplot(121)
-        ax1.plot(np.arange(start_epoch, start_epoch+total_epochs), [x[0] for x in sep_loss_avg], color='brown', linewidth=1, label="Hinge")
-        ax1.plot(np.arange(start_epoch, start_epoch+total_epochs), [x[1] for x in sep_loss_avg], color='green', linewidth=1, label="CrossEntropy")
+        ax1.plot(np.arange(start_epoch, start_epoch+config.total_epochs), [x[0] for x in sep_loss_avg], color='brown', linewidth=1, label="Hinge")
+        ax1.plot(np.arange(start_epoch, start_epoch+config.total_epochs), [x[1] for x in sep_loss_avg], color='green', linewidth=1, label="CrossEntropy")
         ax1.set_xlabel("Epochs")
         ax1.set_ylabel("Losses")
         ax1.legend()
 
         ax2 = fig.add_subplot(122)
-        ax2.plot(np.arange(start_epoch, start_epoch+total_epochs), [x[2] for x in sep_loss_avg], color='olive', linewidth=1, label="MSE")
-        ax2.plot(np.arange(start_epoch, start_epoch+total_epochs), combo_loss_avg, color='red', linewidth=2, label="Combined")
+        ax2.plot(np.arange(start_epoch, start_epoch+config.total_epochs), [x[2] for x in sep_loss_avg], color='olive', linewidth=1, label="MSE")
+        ax2.plot(np.arange(start_epoch, start_epoch+config.total_epochs), combo_loss_avg, color='red', linewidth=2, label="Combined")
         ax2.set_xlabel("Epochs")
         ax2.set_ylabel("Losses")
         ax2.legend()
 
-        plt.title(plot_dir_name)
-        ax1.set_title(plot_dir_name+': indivudual losses')
-        ax2.set_title(plot_dir_name+': combined loss')
-        plt.savefig(plot_path + plot_dir_name+'_Learning_curve.pdf')
+        plt.title(config.plot_dir_name)
+        ax1.set_title(config.plot_dir_name+': indivudual losses')
+        ax2.set_title(config.plot_dir_name+': combined loss')
+        plt.savefig(config.plot_path + config.plot_dir_name+'_Learning_curve.pdf')
         plt.close(fig)
-
-        # pdb.set_trace()
-        # print("Plot learned clusters")
-        # n_clusters = data[0].y[data[0].y < input_classes].max().item() + 1
-        # print("Number of clusters: ", n_clusters)
-
-        # fig, ax = plt.subplots()
-        # for i in range(n_clusters):
-        #     mapped_i = pred_cluster_match[i].item()
-        #     r = test_data[0].x[test_data[0].y < input_classes][cluster_map == mapped_i,0].detach().cpu().numpy()
-        #     phi = test_data[0].x[test_data[0].y < input_classes][cluster_map == mapped_i,1].detach().cpu().numpy()
-        #     z = test_data[0].x[test_data[0].y < input_classes][cluster_map == mapped_i,2].detach().cpu().numpy()
-        #     ax.scatter(r*np.cos(phi), 
-        #             r*np.sin(phi),
-        #             color=color_cycle[2*idata + i], marker = marker_hits[i%6], s=100);
-        #     ax.text((r*np.cos(phi)).mean(), (r*np.sin(phi)).mean(), 'pt_pred = %.3f\npt_true = %.3f' % (1./cluster_props[mapped_i].item(), 1/y_properties[i]))
-        # plt.savefig(plot_path+'learned_clusters.pdf')
-        # plt.close(fig)
-
-    # print("UnionFind Roots:")
-    # objects = UnionFind(coords.size()[0])
-    # good_edges = edges.t()[torch.argmax(edge_scores, dim=1) > 0].cpu().numpy()
-    # for edge in good_edges:
-    #     objects.union(edge[0],edge[1])
-    #     #objects.union(edge[1],edge[0])
-    # roots = np.array([objects.find(i) for i in range(coords.size()[0])], dtype=np.int64)
-    # print(roots)

@@ -262,10 +262,9 @@ class TrackMLParticleTrackingDataset(Dataset):
 
 
         #________for testing________________________________________
-        print(30 + hits.size%3)
-        hits = hits[(hits['remapped_pid'] > 0) & (hits['remapped_pid'] < (30 + hits.size%3))]
+        print(300 + hits.size%3)
+        hits = hits[(hits['remapped_pid'] > 0) & (hits['remapped_pid'] < (300 + hits.size%3))]
         hits['remapped_pid'] = hits['remapped_pid'] - 1
-        
         
         r = np.sqrt(hits['x'].values**2 + hits['y'].values**2)
         phi = np.arctan2(hits['y'].values, hits['x'].values)
