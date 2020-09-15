@@ -178,14 +178,14 @@ class SimpleEmbeddingNetwork(nn.Module):
         use Embedding1 to build an edge classifier
         inputnet_cat is residual to inputnet
         '''
-        x_cat = self.inputnet_cat(x) + x_emb
+        x_cat = self.inputnet_cat(x) #+ x_emb
 
         '''
         [2]
         Compute Edge Categories Convolution over Embedding1
         '''
         for ec in self.edgecatconvs:            
-            x_cat = x_cat + ec(torch.cat([x_cat, x_emb, x], dim=1), edge_index)
+            x_cat = x_cat + ec(torch.cat([x_cat, x_emb.detach(), x], dim=1), edge_index)
         
         edge_scores = self.edge_classifier(torch.cat([x_cat[edge_index[0]], 
                                                       x_cat[edge_index[1]]], 
@@ -216,11 +216,11 @@ class SimpleEmbeddingNetwork(nn.Module):
         use Embedding1 to learn segmented cluster properties 
         inputnet_cat is residual to inputnet
         '''
-        x_prop = self.inputnet_prop(x) + x_emb
+        x_prop = self.inputnet_prop(x) #+ x_emb
         # now we accumulate over all selected disjoint subgraphs
         # to define per-object properties
         for ec in self.propertyconvs:
-            x_prop = x_prop + ec(torch.cat([x_prop, x_emb, x], dim=1), good_edges)        
+            x_prop = x_prop + ec(torch.cat([x_prop, x_emb.detach(), x], dim=1), good_edges)        
         props_pooled, cluster_batch = max_pool_x(cluster_map, x_prop, batch)
         cluster_props = self.property_predictor(props_pooled)    
 
