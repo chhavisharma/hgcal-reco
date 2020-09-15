@@ -138,15 +138,6 @@ def match_cluster_targets(clusters, truth_clusters, data):
     #print('match_cluster_targets')
     return pred_indices, y_properties ## Also predict Eta-Phi
 
-def load_data(root_path, samples):
-    print('Loading data ...')
-    data = TrackMLParticleTrackingDataset(root=root_path,
-                                        layer_pairs_plus=True,
-                                        pt_min=0,
-                                        n_events=samples, n_workers=1)
-    print('{} events read.'.format(data))
-    return data
-
 def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, \
           lr_threshold_1, lr_threshold_2, converged_embedding, converged_categorizer, start_epoch, best_loss):
 
@@ -512,9 +503,13 @@ if __name__ == "__main__":
     if not os.path.exists(config.checkpoint_path):
         os.makedirs(config.checkpoint_path)    
 
-
     '''Load Data'''
-    data = load_data(config.data_root, config.train_samples+config.test_samples)
+    print('Loading data ...')
+    data = TrackMLParticleTrackingDataset(root=config.data_root,
+                                        layer_pairs_plus=True, pt_min=0,
+                                        n_events= config.train_samples + config.test_samples, 
+                                        n_workers=1)
+    print('{} events read.'.format(data))
 
     '''Load Model'''
     model = SimpleEmbeddingNetwork(input_dim=config.input_dim, 
@@ -530,13 +525,12 @@ if __name__ == "__main__":
                                 interm_out=config.interm_out
                                 ).to('cuda')
     
-    '''Not used a tthe moment'''
-    lr_threshold_1    = 1e-4 #5e-3
-    lr_threshold_2    = 7.5e-4 #1e-3
-    
-    lr_param_gp_1     = 5e-3
-    lr_param_gp_2     = 0   
-    lr_param_gp_3     = 0  
+    '''Not used at the moment'''
+    lr_threshold_1    = config.lr_threshold_1
+    lr_threshold_2    = config.lr_threshold_2
+    lr_param_gp_1     = config.lr_param_gp_1
+    lr_param_gp_2     = config.lr_param_gp_2   
+    lr_param_gp_3     = config.lr_param_gp_3 
 
     '''Set Optimizer'''
     opt = torch.optim.AdamW([
@@ -567,21 +561,19 @@ if __name__ == "__main__":
     logtofile(config.plot_path, config.logfile_name, "LEARNING RATE:\nParamgp1:{:.3e}\nParamgp2:{:.3e}\nParamgp3:{:.3e}".format(lr_param_gp_1, lr_param_gp_2, lr_param_gp_3))
     logtofile(config.plot_path, config.logfile_name, "threshold_1={:.3e}\nthreshold_2={:.3e}\n".format(lr_threshold_1, lr_threshold_2))
 
-
     converged_embedding = False
     converged_categorizer = False
     start_epoch = 0
     best_loss = np.inf
 
     if (config.load_checkpoint_path != False):
-
         model, opt, sched, start_epoch, converged_categorizer, converged_embedding, best_loss = \
                                             load_checkpoint(config.load_checkpoint_path, model, opt, sched)
-
         print('\nloaded checkpoint:')
         print('\tstart_epoch :',start_epoch)
         print('\tbest_loss   :',best_loss)
         logtofile(config.plot_path, config.logfile_name, '\nloaded checkpoint with start epoch {} and loss {} \n'.format(start_epoch,best_loss))
+
 
     ''' Train '''
     combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties, edge_acc_conf = training(data, model, opt, sched, \
@@ -593,7 +585,7 @@ if __name__ == "__main__":
     test_combo_loss_avg, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties, test_edge_acc_conf = testing(data, model)    
 
 
-    '''Save Losses'''
+    '''Save Stats'''
     training_dict = {  
         'Combined_loss':combo_loss_avg,
         'Seperate_loss':sep_loss_avg,
@@ -613,6 +605,7 @@ if __name__ == "__main__":
     }
     with open(config.plot_path+'/testing.pickle', 'wb') as handle:
         pickle.dump(training_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
 
     '''Learning Curve / Clusters / Centers'''
     if(config.make_plots==True):

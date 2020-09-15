@@ -39,3 +39,12 @@ conv_depth    = 3
 edgecat_depth = 6  # TRY DEPTH==3,tried - kills edgenet's performance
 make_plots   = True
 make_test_plots = True
+
+
+# Learning Rates
+lr_threshold_1    = 1e-4 #5e-3
+lr_threshold_2    = 7.5e-4 #1e-3
+
+lr_param_gp_1     = 5e-2 #5e-3
+lr_param_gp_2     = 5e-2 #0   
+lr_param_gp_3     = 5e-2 #0 
