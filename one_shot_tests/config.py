@@ -10,10 +10,10 @@ logfile_name = 'training.log'
 logfile_name_test = 'testing.log'
 
 total_epochs  = 500
-train_samples = 20
+train_samples = 500
 batch_size    = 10 # this is a batch by hand so be careful
-test_samples  = 20
-input_classes = 20
+test_samples  = 100
+input_classes = 50
 
 plot_dir_root   = './plots/'
 plot_dir_name   = 'train_event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)
@@ -49,3 +49,6 @@ lr_threshold_2    = 7.5e-4 #1e-3
 lr_param_gp_1     = 5e-2 #5e-3
 lr_param_gp_2     = 5e-2 #0   
 lr_param_gp_3     = 5e-2 #0 
+
+reduceLR_factor   = 0.60
+reduceLR_patience = 50

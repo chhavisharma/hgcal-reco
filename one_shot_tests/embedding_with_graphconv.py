@@ -558,12 +558,13 @@ if __name__ == "__main__":
                             {'params': list(model.inputnet_cat.parameters()) + list(model.edgecatconvs.parameters()) + list(model.edge_classifier.parameters()), 'lr': lr_param_gp_2},
                             {'params': list(model.inputnet_prop.parameters()) + list(model.propertyconvs.parameters()) + list(model.property_predictor.parameters()), 'lr': lr_param_gp_3}
                             ], lr=lr_param_gp_1, weight_decay=1e-3)
-    sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=0.70, patience=30)
+    sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=config.reduceLR_factor, patience=config.reduceLR_patience)
 
     print('[CONFIG]')
     print('Epochs   : ', config.total_epochs)
     print('Samples  : ', config.train_samples)
     print('TrackKind: ', config.input_classes)
+    print('BatchSize: ', config.batch_size)    
     print('InputdDim: ', config.input_dim)
     print('HiddenDim: ', config.hidden_dim)
     print('OutputDim: ', config.output_dim)
@@ -575,7 +576,7 @@ if __name__ == "__main__":
 
 
     logtofile(config.plot_path, config.logfile_name, '\nStart time: '+datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-    logtofile(config.plot_path, config.logfile_name, "\nCONFIG: {}\nEpochs:{}\nEvents:{}\nTracks: {}".format(config.plot_dir_name, config.total_epochs, config.train_samples, config.input_classes))
+    logtofile(config.plot_path, config.logfile_name, "\nCONFIG: {}\nEpochs:{}\nEvents:{}\nTracks: {}\nBatch Size: {}".format(config.plot_dir_name, config.total_epochs, config.train_samples, config.input_classes, config.batch_size))
     logtofile(config.plot_path, config.logfile_name, "MODEL:\nInputDim={}\nHiddenDim={}\nOutputDim={}\nconfig.interm_out={}\nNcatsOut={}\nNPropsOut={}\nConvDepth={}\nKNN_k={}\nEdgeCatDepth={}".format(
                                                 config.input_dim,config.hidden_dim,config.output_dim,config.interm_out,config.ncats_out,config.nprops_out,config.conv_depth,config.k,config.edgecat_depth))
     logtofile(config.plot_path, config.logfile_name, "LEARNING RATE:\nParamgp1:{:.3e}\nParamgp2:{:.3e}\nParamgp3:{:.3e}".format(lr_param_gp_1, lr_param_gp_2, lr_param_gp_3))
