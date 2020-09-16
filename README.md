@@ -1,6 +1,9 @@
 ## HGCal Recostruction
 
-ML based Reconstruction for HgCal Data. A tracker for work done at Fermilabs.
+ML based Reconstruction for HCCAL Data. 
+Here we are using the TrackML dataset as a testing ground for a panoptic segmentation task, which is assigning "hits" from a particle physics detector into "tracks" or otherwise clusters and also assigning various properties to the hits and found clusters.
+Once there is suitable ground truth for HGCAL we'll move to that.
+This work is supported by LDRD grant 2019-017 funded by Fermilab.
 
 Current:\
 Experiments with end-to-end reconstruction/segmentation/regression model design, with a simpler dataset for proof of concept. \
