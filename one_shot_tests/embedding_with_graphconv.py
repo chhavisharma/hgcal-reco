@@ -47,41 +47,69 @@ m = cm.ScalarMappable(norm=color_range, cmap=cmap)
 '''Data Norm'''
 data_norm = torch.tensor([1./70., 1./5., 1./400.])
 
-def simple_embedding_truth(coords, truth_label_by_hits, device='cpu'):
+def center_embedding_truth(coords, truth_label_by_hits, device='cpu'):
     truth_ordering = torch.argsort(truth_label_by_hits)    
     uniques, counts = torch.unique(truth_label_by_hits, return_counts=True)
-    out_truths: List[PairTensor] = []
 
-    '''
-    for each latent space 2d -coordinates of category cat, compute all incat and outofcat indices,
-    then compute pnorm distace with both kind of categories,
-    return distances and truths(in or out)
-    '''
-    for cat in uniques:
+    n_hits = truth_label_by_hits.size()[0]
+    n_clusters = uniques.size()[0]
+    
+    centers = scatter_mean(coords, truth_label_by_hits, dim=0, dim_size=n_clusters)
 
-        thecat = cat.item()
-        in_cat = coords[truth_label_by_hits == thecat]
-        not_cat = coords[truth_label_by_hits != thecat]
-        
-        in_cat_dists = torch.cdist(in_cat, in_cat)
-        in_idxs = torch.triu_indices(in_cat_dists.size()[0], in_cat_dists.size()[0], 
-                                     offset=1, device=in_cat.device)
-        in_idxs = in_idxs[0] + in_cat_dists.size()[0]*in_idxs[1]
-        in_cat_dists = in_cat_dists.view(-1)[in_idxs] / (uniques.size()[0] - 1)
-        
-        '''
-        all pairwise distances between in-category and out of category
-        there's a factor of 2 here I need to deal with
-        '''
-        not_cat_dists = torch.cdist(in_cat, not_cat).flatten() / (uniques.size()[0] - 1)
-                
-        '''build the final labelled distance vectors'''
-        dists = torch.cat([in_cat_dists, not_cat_dists], dim=0)
-        truth = torch.cat([torch.ones_like(in_cat_dists, dtype=torch.int64),
-                           torch.full_like(not_cat_dists, -1, dtype=torch.int64)], dim=0)
-        out_truths.append((dists, truth))
+    all_dists = torch.cdist(coords.expand(n_clusters,-1,-1).contiguous(), centers[:,None])
+    copied_truth = truth_label_by_hits.expand(n_clusters,-1)
+    copied_uniques = uniques[:,None].expand(-1, n_hits)
+    truth = torch.where(copied_truth == copied_uniques,
+                        torch.ones((n_clusters, n_hits), dtype=torch.int64, device=device), 
+                        torch.full((n_clusters, n_hits), -1, dtype=torch.int64, device=device))
+    
+    dists_out = all_dists.reshape(n_clusters*n_hits)
+    truth_out = truth.reshape(n_clusters*n_hits)
+    
+    return (dists_out, truth_out)
 
     return out_truths
+
+import numba as nb
+from numba.typed import List
+
+@nb.njit()
+def build_cluster_list(indices, clusters, labels):
+    pred_clusters = []
+    for label in labels:
+        pred_clusters.append(indices[clusters == label])
+    return pred_clusters
+
+@nb.njit()
+def do_matching(indices, pred_labels, true_labels, data_y, data_y_particle_barcodes, data_truth_barcodes, 
+               data_truth_pt, data_truth_eta, data_truth_phi):
+    matched_pred_clusters = []
+    true_cluster_properties = np.zeros((len(true_labels), 3), dtype=np.float32)
+    for i, label in enumerate(true_labels):
+        true_indices = set(indices[data_y == label])
+        best_pred_cluster = -1
+        best_iou = 0
+        for j, pc in enumerate(pred_labels):
+            #print('i-pred',i)
+            pc = set(pc)
+            isec = true_indices & pc
+            iun = true_indices | pc
+            iou = len(isec)/len(iun)
+            if best_pred_cluster == -1 or iou > best_iou:
+                best_pred_cluster = j
+                best_iou = iou
+        matched_pred_clusters.append(best_pred_cluster)
+        # now make the properties vector
+        thebc = np.unique(data_y_particle_barcodes[data_y == label])[0]
+        select_truth = (data_truth_barcodes == thebc)
+        pt_inv = np.reciprocal(data_truth_pt[select_truth])
+        eta = data_truth_eta[select_truth]
+        phi = data_truth_phi[select_truth]
+        true_cluster_properties[i][0] = pt_inv[0]
+        true_cluster_properties[i][1] = eta[0]
+        true_cluster_properties[i][2] = phi[0]
+
+    return matched_pred_clusters, true_cluster_properties
 
 def match_cluster_targets(clusters, truth_clusters, data):
     np_truth_clusters = truth_clusters.cpu().numpy()
@@ -90,53 +118,25 @@ def match_cluster_targets(clusters, truth_clusters, data):
     pred_cluster_labels = np.unique(np_clusters)
     pred_cluster_mask = np.ones_like(np_truth_clusters, dtype=np.bool)
         
-    #print(data)    
-    #print('match_cluster_targets')
-    #print(np_clusters)
-    #print(np_truth_clusters)
-    #print(true_cluster_labels)
-    #print(pred_cluster_labels)
     indices = np.arange(np_clusters.size, dtype=np.int64)
-    #print(indices)
-    pred_clusters = []
-    for label in pred_cluster_labels:
-        pred_clusters.append(indices[np_clusters == label])
-    #print(pred_clusters)
+    pred_clusters = build_cluster_list(indices, np_clusters, pred_cluster_labels)
     
-    # make pt weighting vector
-    max_pt = torch.max(data.truth_pt).item()
-    #print(max_pt)
-    
-    matched_pred_clusters = []
-    true_cluster_properties = []
-    for label in true_cluster_labels:
-        true_indices = indices[np_truth_clusters == label]        
-        best_pred_cluster = -1
-        best_iou = 0
-        for i, pc in enumerate(pred_clusters):
-            isec = np.intersect1d(true_indices, pc)
-            iun = np.union1d(true_indices, pc)
-            iou = isec.size/iun.size
-            if best_pred_cluster == -1 or iou > best_iou:
-                best_pred_cluster = i
-                best_iou = iou
-        matched_pred_clusters.append(best_pred_cluster)
-        
-        '''now make the properties vector'''
-        thebc = torch.unique(data.y_particle_barcodes[data.y == label]).item()
-        select_truth = (data.truth_barcodes == thebc)
-        true_cluster_properties.append(1./data.truth_pt[select_truth])
-        #[data.truth_eta[select_truth], data.truth_phi[select_truth]] ### TRY_THIS ETA+PHI
+    matched_pred_clusters, true_cluster_properties = \
+        do_matching(indices, pred_clusters, true_cluster_labels, 
+                    data.y.cpu().numpy(),
+                    data.y_particle_barcodes.cpu().numpy(),
+                    data.truth_barcodes.cpu().numpy(),
+                    data.truth_pt.cpu().numpy(), 
+                    data.truth_eta.cpu().numpy(), 
+                    data.truth_phi.cpu().numpy())
+
     matched_pred_clusters = np.array(matched_pred_clusters, dtype=np.int64)
     pred_indices = torch.from_numpy(matched_pred_clusters).to(clusters.device)
-    #print(pred_indices)
     
     true_cluster_properties = np.array(true_cluster_properties, dtype=np.float)
     y_properties = torch.from_numpy(true_cluster_properties).to(clusters.device).float()
-    # print(y_properties)    
     
-    #print('match_cluster_targets')
-    return pred_indices, y_properties ## Also predict Eta-Phi
+    return pred_indices, y_properties
 
 def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, \
           lr_threshold_1, lr_threshold_2, converged_embedding, converged_categorizer, start_epoch, best_loss):
@@ -196,7 +196,7 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
 
             #-------------- LINDSEY TRAINING VERSION ------------------         
             '''Compute latent space distances'''
-            multi_simple_hinge = simple_embedding_truth(coords, d_gpu.y, device='cuda')
+            d_hinge, y_hinge = center_embedding_truth(coords, d_gpu.y, device='cuda')
             # multi_simple_hinge += simple_embedding_truth(coords_interm, d_gpu.y, device='cuda')
             
             '''Compute centers in latent space '''
@@ -204,8 +204,11 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
             
             '''Compute Losses'''
             # Hinge: embedding distance based loss
-            hinges = torch.cat([F.hinge_embedding_loss(dis**2, y, margin=1.0, reduction='mean')[None] 
-                                for dis, y in multi_simple_hinge],dim=0)
+            loss_hinge = F.hinge_embedding_loss(torch.where(y_hinge == 1, 
+                                                            d_hinge**2, 
+                                                            d_hinge), 
+                                                y_hinge, 
+                                                margin=2.0, reduction='mean')
             
             #Cross Entropy: Edge categories loss
             y_edgecat = (d_gpu.y[edges[0]] == d_gpu.y[edges[1]]).long()
@@ -213,18 +216,25 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
             
             #MSE: Cluster loss
             pred_cluster_match, y_properties = match_cluster_targets(cluster_map, d_gpu.y, d_gpu)
-            loss_mse = F.mse_loss(cluster_props[pred_cluster_match].squeeze(), y_properties, reduction='mean')
+            mapped_props = cluster_props[pred_cluster_match].squeeze()
+            props_pt = F.softplus(mapped_props[:,0])
+            props_eta = 5.0*(2*torch.sigmoid(mapped_props[:,1]) - 1)
+            props_phi = math.pi*(2*torch.sigmoid(mapped_props[:,2]) - 1)
+    
+            loss_mse = ( F.mse_loss(props_pt, y_properties[:,0], reduction='mean') +
+                         F.mse_loss(props_eta, y_properties[:,1], reduction='mean') +
+                         F.mse_loss(props_phi, y_properties[:,2], reduction='mean') ) / model.nprops_out
             
             #Combined loss
-            loss = hinges.mean() + loss_ce + loss_mse
+            loss = (loss_hinge + loss_ce + loss_mse) / config.batch_size
             avg_loss_track[idata] = loss.item()
             
             avg_loss += loss.item()
 
             '''Track Losses, Acuracies and Properties'''   
-            sep_loss_track[idata,0]= hinges.mean().detach().cpu().numpy()
-            sep_loss_track[idata,1]= loss_ce.detach().cpu().numpy()
-            sep_loss_track[idata,2]= loss_mse.detach().cpu().numpy()
+            sep_loss_track[idata,0] = loss_hinge.detach().cpu().numpy() / config.batch_size
+            sep_loss_track[idata,1] = loss_ce.detach().cpu().numpy() / config.batch_size
+            sep_loss_track[idata,2] = loss_mse.detach().cpu().numpy() / config.batch_size
 
             true_edges = y_edgecat.sum().item()
             edge_accuracy = (torch.argmax(edge_scores, dim=1) == y_edgecat).sum().item() / (y_edgecat.size()[0])
@@ -234,7 +244,8 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
 
             true_prop = y_properties.detach().cpu().numpy()
             pred_prop = cluster_props[pred_cluster_match].squeeze().detach().cpu().numpy()
-            pred_cluster_properties.append([1/true_prop,1/pred_prop])
+            pred_cluster_properties.append([(1./y_properties[:,0], 1./y_properties[:,1], 1./y_properties[:,2]),
+                                            (1./props_pt), (1./props_eta), (1./props_phi)])
 
             '''Plot Training Clusters'''
             # if (config.make_plots==True):
@@ -271,6 +282,11 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
 
             '''Loss Backward''' 
             loss.backward()
+            
+            '''Update Weights'''
+            if ( (idata + 1) % config.batch_size == 0 ):
+                opt.step()
+                sched.step(avg_loss)
         
         '''track Epoch Updates'''
         combo_loss_avg.append(avg_loss_track.mean())
@@ -319,9 +335,7 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
                 checkpoint_name = 'event'+str(config.train_samples)+'_classes' + str(config.input_classes) + '_epoch'+str(epoch) + '_loss' + '{:.5e}'.format(combo_loss_avg[epoch-start_epoch]) + '_edgeAcc' + '{:.5e}'.format(edge_acc_track.mean())
                 save_checkpoint(checkpoint, is_best, config.checkpoint_path, checkpoint_name)
 
-        '''Update Weights'''
-        opt.step()
-        sched.step(avg_loss)
+        
 
     t2 = timer()
     print('--------------------')
@@ -382,8 +396,7 @@ def testing(data, model):
             coords, edge_scores, edges, cluster_map, cluster_props, cluster_batch = model(d_gpu.x)
             
             '''Compute latent space distances'''
-            multi_simple_hinge = simple_embedding_truth(coords, d_gpu.y, device='cuda')
-            # multi_simple_hinge += simple_embedding_truth(coords_interm, d_gpu.y, device='cuda')
+            d_hinge, y_hinge = center_embedding_truth(coords, d_gpu.y, device='cuda')
             
             '''Predict centers in latent space '''
             centers = scatter_mean(coords, d_gpu.y, dim=0, dim_size=(torch.max(d_gpu.y).item()+1))
@@ -392,8 +405,11 @@ def testing(data, model):
             '''LOSSES'''
             
             '''Hinge: embedding distance based loss'''
-            hinges = torch.cat([F.hinge_embedding_loss(dis**2, y, margin=1.0, reduction='mean')[None] 
-                                for dis, y in multi_simple_hinge],dim=0)
+            loss_hinge = F.hinge_embedding_loss(torch.where(y_hinge == 1, 
+                                                            d_hinge**2, 
+                                                            d_hinge), 
+                                                y_hinge, 
+                                                margin=2.0, reduction='mean')
             
             '''Cross Entropy: Edge categories loss'''
             y_edgecat = (d_gpu.y[edges[0]] == d_gpu.y[edges[1]]).long()
@@ -404,13 +420,13 @@ def testing(data, model):
             loss_mse = F.mse_loss(cluster_props[pred_cluster_match].squeeze(), y_properties, reduction='mean')
             
             '''Combined loss'''
-            loss = hinges.mean() + loss_ce + loss_mse
+            loss = loss_hinge + loss_ce + loss_mse
             avg_loss_track[idata] = loss.item()
             
             avg_loss += loss.item()
 
             '''Track Losses, Acuracies and Properties'''   
-            sep_loss_track[idata,0]= hinges.mean().detach().cpu().numpy()
+            sep_loss_track[idata,0]= loss_hinge.detach().cpu().numpy()
             sep_loss_track[idata,1]= loss_ce.detach().cpu().numpy()
             sep_loss_track[idata,2]= loss_mse.detach().cpu().numpy()
 
@@ -486,7 +502,7 @@ def testing(data, model):
 
     t2 = timer()
 
-    print("Testing Complted in {:.5f}mins.\n".format((t2-t1)/60.0))
+    print("Testing Completed in {:.5f}mins.\n".format((t2-t1)/60.0))
     return combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties, edge_acc_conf
 
 if __name__ == "__main__":

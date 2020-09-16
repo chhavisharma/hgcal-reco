@@ -11,6 +11,7 @@ logfile_name_test = 'testing.log'
 
 total_epochs  = 10
 train_samples = 10
+batch_size = 10 # this is a batch by hand so be careful
 test_samples  = 10
 input_classes = 10
 
@@ -27,11 +28,11 @@ checkpoint_path = checkpoint_dir+plot_dir_name
 input_dim  = 3
 hidden_dim = 32
 interm_out = None
-output_dim = 2
+output_dim = 3
 
 # Regressor and Classifier Output Dim
 ncats_out  = 2
-nprops_out = 1
+nprops_out = 3
 
 # EdgeCat Settings
 k             = 8 

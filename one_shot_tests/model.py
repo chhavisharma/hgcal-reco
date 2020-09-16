@@ -30,6 +30,7 @@ class SimpleEmbeddingNetwork(nn.Module):
         
         # self.datanorm = nn.Parameter(norm, requires_grad=False)
         self.k = k
+        self.nprops_out = nprops_out
         
         start_width = 2 * (hidden_dim )
         middle_width = (3 * hidden_dim ) // 2
@@ -171,8 +172,7 @@ class SimpleEmbeddingNetwork(nn.Module):
 
 
         '''KNN(k neighbors) over Embedding2 features''' 
-        # edge_index = knn_graph(out, self.k, batch, loop=False, flow=ec.flow)
-        edge_index = radius_graph(out, r=0.5, batch=batch, loop=False)
+        edge_index = radius_graph(out, r=0.5, batch=batch, max_num_neighbors=self.k, loop=False)
         
         ''' 
         use Embedding1 to build an edge classifier
