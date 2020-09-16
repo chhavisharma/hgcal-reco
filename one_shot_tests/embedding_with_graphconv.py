@@ -13,6 +13,7 @@ import pickle
 from sklearn.metrics import confusion_matrix
 
 import time
+import math
 from datetime import datetime
 from timeit import default_timer as timer
 #https://github.com/eldridgejm/unionfind
@@ -189,7 +190,7 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
             # plot_event(d_gpu.x.detach().cpu().numpy(), d_gpu.y.detach().cpu().numpy())
             
             '''
-            project embedding to some 2d latent space where it is seperable using the deep model
+            project embedding to some nd latent space where it is seperable using the deep model
             compute edge net scores and seperated cluster properties with the ebedding
             '''
             coords, edge_scores, edges, cluster_map, cluster_props, cluster_batch = model(d_gpu.x)
@@ -288,9 +289,11 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
                 opt.step()
                 sched.step(avg_loss)
         
+
         '''track Epoch Updates'''
         combo_loss_avg.append(avg_loss_track.mean())
         sep_loss_avg.append([sep_loss_track[:,0].mean(), sep_loss_track[:,1].mean(), sep_loss_track[:,2].mean()])
+        
         true_0_1 = edge_acc_conf.sum(axis=2)
         pred_0_1 = edge_acc_conf.sum(axis=1) 
         total_true_0_1 =   true_0_1.sum(axis=0)
@@ -316,8 +319,6 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
                 logtofile(config.plot_path, config.logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(config.train_samples, config.input_classes,edge_acc_track.mean()) )                    
                 logtofile(config.plot_path, config.logfile_name,"Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
                 logtofile(config.plot_path, config.logfile_name,"Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))                
-                # logtofile(config.plot_path, config.logfile_name,'Properties:\n')
-                # logtofile(config.plot_path, config.logfile_name,str(pred_cluster_properties))
                 logtofile(config.plot_path, config.logfile_name,'--------------------------')
 
             if(combo_loss_avg[epoch-start_epoch] < best_loss):
@@ -375,9 +376,6 @@ def testing(data, model):
         edge_acc_conf  = np.zeros((config.test_samples,config.ncats_out,config.ncats_out), dtype=np.int)
         pred_cluster_properties = []
         avg_loss = 0
-        
-        if config.make_plots:
-            plt.clf()
 
         for idata, d in enumerate(data[config.train_samples:config.train_samples+config.test_samples]):            
             
@@ -390,55 +388,62 @@ def testing(data, model):
             d_gpu.y = d_gpu.y[d_gpu.y < config.input_classes]
 
             '''
-            project data to some 2d plane where it is seperable usinfg the deep model
+            project data to some nd plane where it is seperable usinfg the deep model
             compute edge net scores and seperated cluster properties in that latent space
             '''
             coords, edge_scores, edges, cluster_map, cluster_props, cluster_batch = model(d_gpu.x)
-            
+
             '''Compute latent space distances'''
             d_hinge, y_hinge = center_embedding_truth(coords, d_gpu.y, device='cuda')
-            
-            '''Predict centers in latent space '''
+            # multi_simple_hinge += simple_embedding_truth(coords_interm, d_gpu.y, device='cuda')
+
+            '''Compute centers in latent space '''
             centers = scatter_mean(coords, d_gpu.y, dim=0, dim_size=(torch.max(d_gpu.y).item()+1))
-            
-            
-            '''LOSSES'''
-            
-            '''Hinge: embedding distance based loss'''
+
+            '''Compute Losses'''
+            # Hinge: embedding distance based loss
             loss_hinge = F.hinge_embedding_loss(torch.where(y_hinge == 1, 
                                                             d_hinge**2, 
                                                             d_hinge), 
                                                 y_hinge, 
                                                 margin=2.0, reduction='mean')
-            
-            '''Cross Entropy: Edge categories loss'''
+
+            #Cross Entropy: Edge categories loss
             y_edgecat = (d_gpu.y[edges[0]] == d_gpu.y[edges[1]]).long()
             loss_ce = F.cross_entropy(edge_scores, y_edgecat, reduction='mean')
-            
-            '''MSE: Cluster loss'''
+
+            #MSE: Cluster loss
             pred_cluster_match, y_properties = match_cluster_targets(cluster_map, d_gpu.y, d_gpu)
-            loss_mse = F.mse_loss(cluster_props[pred_cluster_match].squeeze(), y_properties, reduction='mean')
-            
-            '''Combined loss'''
-            loss = loss_hinge + loss_ce + loss_mse
+            mapped_props = cluster_props[pred_cluster_match].squeeze()
+            props_pt = F.softplus(mapped_props[:,0])
+            props_eta = 5.0*(2*torch.sigmoid(mapped_props[:,1]) - 1)
+            props_phi = math.pi*(2*torch.sigmoid(mapped_props[:,2]) - 1)
+
+            loss_mse = ( F.mse_loss(props_pt, y_properties[:,0], reduction='mean') +
+                            F.mse_loss(props_eta, y_properties[:,1], reduction='mean') +
+                            F.mse_loss(props_phi, y_properties[:,2], reduction='mean') ) / model.nprops_out
+
+            #Combined loss
+            loss = (loss_hinge + loss_ce + loss_mse) / config.batch_size
             avg_loss_track[idata] = loss.item()
-            
+
             avg_loss += loss.item()
 
             '''Track Losses, Acuracies and Properties'''   
-            sep_loss_track[idata,0]= loss_hinge.detach().cpu().numpy()
-            sep_loss_track[idata,1]= loss_ce.detach().cpu().numpy()
-            sep_loss_track[idata,2]= loss_mse.detach().cpu().numpy()
+            sep_loss_track[idata,0] = loss_hinge.detach().cpu().numpy() / config.batch_size
+            sep_loss_track[idata,1] = loss_ce.detach().cpu().numpy() / config.batch_size
+            sep_loss_track[idata,2] = loss_mse.detach().cpu().numpy() / config.batch_size
 
             true_edges = y_edgecat.sum().item()
             edge_accuracy = (torch.argmax(edge_scores, dim=1) == y_edgecat).sum().item() / (y_edgecat.size()[0])
             edge_acc_track[idata] = edge_accuracy
-            edge_acc_conf[idata,:,:] = confusion_matrix(y_edgecat.detach().cpu().numpy(), torch.argmax(edge_scores, dim=1).detach().cpu().numpy())
 
+            edge_acc_conf[idata,:,:] = confusion_matrix(y_edgecat.detach().cpu().numpy(), torch.argmax(edge_scores, dim=1).detach().cpu().numpy())
 
             true_prop = y_properties.detach().cpu().numpy()
             pred_prop = cluster_props[pred_cluster_match].squeeze().detach().cpu().numpy()
-            pred_cluster_properties.append([1/true_prop,1/pred_prop])
+            pred_cluster_properties.append([(1./y_properties[:,0], 1./y_properties[:,1], 1./y_properties[:,2]),
+                                            (1./props_pt), (1./props_eta), (1./props_phi)])
 
             '''Plot test clusters'''
             if (config.make_test_plots==True):
@@ -496,8 +501,6 @@ def testing(data, model):
         logtofile(config.plot_path, config.logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(config.test_samples,config.input_classes,edge_acc_track.mean()) )                    
         logtofile(config.plot_path, config.logfile_name,"Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
         logtofile(config.plot_path, config.logfile_name,"Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))
-        logtofile(config.plot_path, config.logfile_name,'\nProperties:')
-        logtofile(config.plot_path, config.logfile_name,str(pred_cluster_properties))
         logtofile(config.plot_path, config.logfile_name,'--------------------------')
 
     t2 = timer()
@@ -544,6 +547,7 @@ if __name__ == "__main__":
     '''Not used at the moment'''
     lr_threshold_1    = config.lr_threshold_1
     lr_threshold_2    = config.lr_threshold_2
+
     lr_param_gp_1     = config.lr_param_gp_1
     lr_param_gp_2     = config.lr_param_gp_2   
     lr_param_gp_3     = config.lr_param_gp_3 

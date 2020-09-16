@@ -9,11 +9,11 @@ load_checkpoint_path = False
 logfile_name = 'training.log'
 logfile_name_test = 'testing.log'
 
-total_epochs  = 10
-train_samples = 10
-batch_size = 10 # this is a batch by hand so be careful
-test_samples  = 10
-input_classes = 10
+total_epochs  = 500
+train_samples = 20
+batch_size    = 10 # this is a batch by hand so be careful
+test_samples  = 20
+input_classes = 20
 
 plot_dir_root   = './plots/'
 plot_dir_name   = 'train_event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)

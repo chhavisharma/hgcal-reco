@@ -102,7 +102,7 @@ class SimpleEmbeddingNetwork(nn.Module):
                 nn.ELU(),
                 nn.Linear(middle_width, hidden_dim),                                             
                 nn.ELU(),
-                nn.BatchNorm1d(num_features=hidden_dim, track_running_stats=False)
+                # nn.BatchNorm1d(num_features=hidden_dim, track_running_stats=False)
             )
             self.edgecatconvs.append(EdgeConv(nn=convnn, aggr=aggr))
         
@@ -137,7 +137,7 @@ class SimpleEmbeddingNetwork(nn.Module):
                 nn.ELU(),
                 nn.Linear(middle_width, hidden_dim),                                             
                 nn.ELU(),
-                nn.BatchNorm1d(num_features=hidden_dim, track_running_stats=False)
+                # nn.BatchNorm1d(num_features=hidden_dim, track_running_stats=False)
             )
             self.propertyconvs.append(EdgeConv(nn=convnn, aggr='max'))
 
