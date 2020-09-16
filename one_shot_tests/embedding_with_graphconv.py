@@ -285,7 +285,7 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
             loss.backward()
             
             '''Update Weights'''
-            if ( (idata + 1) % config.batch_size == 0 ):
+            if ( ((idata + 1) % config.batch_size == 0) or ((idata + 1) == config.train_samples) ):
                 opt.step()
                 sched.step(avg_loss)
         
