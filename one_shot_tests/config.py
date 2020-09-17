@@ -50,5 +50,5 @@ lr_param_gp_1     = 5e-2 #5e-3
 lr_param_gp_2     = 5e-2 #0   
 lr_param_gp_3     = 5e-2 #0 
 
-reduceLR_factor   = 0.60
-reduceLR_patience = 50
+reduceLR_factor   = 0.80
+reduceLR_patience = 30
