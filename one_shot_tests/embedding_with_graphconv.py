@@ -420,8 +420,8 @@ def testing(data, model):
             props_phi = math.pi*(2*torch.sigmoid(mapped_props[:,2]) - 1)
 
             loss_mse = ( F.mse_loss(props_pt, y_properties[:,0], reduction='mean') +
-                            F.mse_loss(props_eta, y_properties[:,1], reduction='mean') +
-                            F.mse_loss(props_phi, y_properties[:,2], reduction='mean') ) / model.nprops_out
+                         F.mse_loss(props_eta, y_properties[:,1], reduction='mean') +
+                         F.mse_loss(props_phi, y_properties[:,2], reduction='mean') ) / model.nprops_out
 
             #Combined loss
             loss = (loss_hinge + loss_ce + loss_mse) / config.batch_size
@@ -525,9 +525,10 @@ if __name__ == "__main__":
     '''Load Data'''
     print('Loading data ...')
     data = TrackMLParticleTrackingDataset(root=config.data_root,
-                                        layer_pairs_plus=True, pt_min=0,
-                                        n_events= config.train_samples + config.test_samples, 
-                                        n_workers=1)
+                                          layer_pairs_plus=True, pt_min=0,
+                                          volume_layer_ids=config.volume_layer_ids,
+                                          n_events=(config.train_samples + config.test_samples), 
+                                          n_workers=1, download_full_dataset=config.full_dataset)
     print('{} events read.'.format(data))
 
     '''Load Model'''
