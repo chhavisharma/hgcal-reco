@@ -46,9 +46,10 @@ make_test_plots = True
 lr_threshold_1    = 1e-4 #5e-3
 lr_threshold_2    = 7.5e-4 #1e-3
 
-lr_param_gp_1     = 5e-2 #5e-3
-lr_param_gp_2     = 5e-2 #0   
-lr_param_gp_3     = 5e-2 #0 
+lr_param_gp_1     = 1e-3 #5e-3
+lr_param_gp_2     = 1e-3 #0   
+lr_param_gp_3     = 1e-3 #0 
 
-reduceLR_factor   = 0.80
+
+reduceLR_factor   = 1.0  #0.80 # set to 1.0 to to stop LRreduciton
 reduceLR_patience = 30
