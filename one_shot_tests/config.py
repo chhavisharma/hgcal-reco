@@ -50,6 +50,5 @@ lr_param_gp_1     = 1e-3 #5e-3
 lr_param_gp_2     = 1e-3 #0   
 lr_param_gp_3     = 1e-3 #0 
 
-
-reduceLR_factor   = 1.0  #0.80 # set to 1.0 to to stop LRreduciton
+reduceLR_factor   = .70  
 reduceLR_patience = 30

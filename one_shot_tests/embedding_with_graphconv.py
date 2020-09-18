@@ -140,7 +140,8 @@ def match_cluster_targets(clusters, truth_clusters, data):
     return pred_indices, y_properties
 
 def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, \
-          lr_threshold_1, lr_threshold_2, converged_embedding, converged_categorizer, start_epoch, best_loss):
+            lr_threshold_1, lr_threshold_2, converged_embedding, converged_categorizer, 
+            start_epoch, best_loss):
 
     model.train()
 
@@ -287,7 +288,7 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
             '''Update Weights'''
             if ( ((idata + 1) % config.batch_size == 0) or ((idata + 1) == config.train_samples) ):
                 opt.step()
-                sched.step(avg_loss)
+                # sched.step(avg_loss)
         
 
         '''track Epoch Updates'''
@@ -335,8 +336,6 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
                 }
                 checkpoint_name = 'event'+str(config.train_samples)+'_classes' + str(config.input_classes) + '_epoch'+str(epoch) + '_loss' + '{:.5e}'.format(combo_loss_avg[epoch-start_epoch]) + '_edgeAcc' + '{:.5e}'.format(edge_acc_track.mean())
                 save_checkpoint(checkpoint, is_best, config.checkpoint_path, checkpoint_name)
-
-        
 
     t2 = timer()
     print('--------------------')
@@ -558,6 +557,7 @@ if __name__ == "__main__":
                             {'params': list(model.inputnet_cat.parameters()) + list(model.edgecatconvs.parameters()) + list(model.edge_classifier.parameters()), 'lr': lr_param_gp_2},
                             {'params': list(model.inputnet_prop.parameters()) + list(model.propertyconvs.parameters()) + list(model.property_predictor.parameters()), 'lr': lr_param_gp_3}
                             ], lr=lr_param_gp_1, weight_decay=1e-3)
+
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=config.reduceLR_factor, patience=config.reduceLR_patience)
 
     print('[CONFIG]')
