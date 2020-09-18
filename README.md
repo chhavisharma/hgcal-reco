@@ -5,14 +5,6 @@ Here we are using the TrackML dataset as a testing ground for a panoptic segment
 Once there is suitable ground truth for HGCAL we'll move to that.
 This work is supported by LDRD grant 2019-017 funded by Fermilab.
 
-To get all necessary software please run `install.sh`!
-You will also need to have a kaggle account and setup the kaggle api to get the dataset we're using!
-
-The TrackML dataset is very large on disk. You will need at least 300 GB of space to hold the full dataset locally.
-The default dataset that is retrieved is a ~1GB sub-sample of the training data which is enought to confirm the software works, but not really train a functioning model.
-
-To run the one-shot segmentation model go into `one_shot_tests` and run `python embedding_with_graphconv.py` to start training.
-
 Current:\
 Experiments with end-to-end reconstruction/segmentation/regression model design, with a simpler dataset for proof of concept. \
 Dataset: [kaggle page](https://www.kaggle.com/c/trackml-particle-identification/overview)\
@@ -22,6 +14,18 @@ Archive:\
 [Presentation Slides](https://docs.google.com/presentation/d/1WW9HBwumZRxsq518BsyRxTFi64VcT6rng09rtjOeNRk/edit?usp=sharing)\
 [Code](https://github.com/chhavisharma/hgcal_ldrd/tree/gravnet2_wip_trainer_args)\
 [Experiment Sheets](https://docs.google.com/spreadsheets/d/1euJGMCJdFs_eDy_KjZnsMze26StiSDS9xHrTFlMHnYE/edit?usp=sharing)
+
+### Installation
+
+To get all necessary software please run `install.sh`!
+
+You will also need to have a kaggle account and setup the kaggle api to get the dataset we're using!
+You can find detailed instruction for setting up the kaggle API tokens [here](https://adityashrm21.github.io/Setting-Up-Kaggle/).
+
+The TrackML dataset is very large on disk. You will need at least 300 GB of space to hold the full dataset locally.
+The default dataset that is retrieved is a ~1GB sub-sample of the training data which is enough to confirm the software works, but not really train a functioning model.
+
+To run the one-shot segmentation model go into `one_shot_tests` and run `python embedding_with_graphconv.py` to start training.
 
 
 ### Index
