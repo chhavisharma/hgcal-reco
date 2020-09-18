@@ -2,7 +2,13 @@ from os.path import expanduser
 home = expanduser("~")
 
 # DATA ROOT
-data_root    = home+'/prototyping/data/train_1_/'
+data_root    = home+'/prototyping/data/trackml/'
+volume_layer_ids = [
+    [8, 2], [8, 4], [8, 6], [8, 8], # barrel pixels
+    [7, 2], [7, 4], [7, 6], [7, 8], [7, 10], [7, 12], [7, 14],# minus pixel endcap
+    [9, 2], [9, 4], [9, 6], [9, 8], [9, 10], [9, 12], [9, 14], # plus pixel endcap
+]
+full_dataset = False
 
 load_checkpoint_path = False
 
@@ -50,5 +56,6 @@ lr_param_gp_1     = 1e-3 #5e-3
 lr_param_gp_2     = 1e-3 #0   
 lr_param_gp_3     = 1e-3 #0 
 
-reduceLR_factor   = .70  
+schedLR           = False
+reduceLR_factor   = .70
 reduceLR_patience = 30

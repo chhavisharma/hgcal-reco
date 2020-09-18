@@ -104,8 +104,9 @@ class TrackMLParticleTrackingDataset(Dataset):
                  pt_min=2.0, eta_range=[-5, 5],                     #Node Cuts
                  phi_slope_max=0.0006, z0_max=150,                  #Edge Cuts
                  n_phi_sections=1, n_eta_sections=1,                #N Sections
-                 augments=False, intersect=False, tracking=False,   #Toggle Switches
-                 n_workers=mp.cpu_count(), n_tasks=1                #multiprocessing
+                 augments=False, intersect=False, tracking=False,   #Toggle Switches                 
+                 n_workers=mp.cpu_count(), n_tasks=1,               #multiprocessing
+                 download_full_dataset=False                        #what to download
                  ):
         events = glob.glob(osp.join(osp.join(root, 'raw'), 'event*-hits.csv'))
         # print('events found = ', len(events))
@@ -131,14 +132,16 @@ class TrackMLParticleTrackingDataset(Dataset):
         self.tracking         = tracking
         self.n_workers        = n_workers
         self.n_tasks          = n_tasks
+        self.full_dataset     = download_full_dataset
+        self.n_events         = n_events
 
         super(TrackMLParticleTrackingDataset, self).__init__(root, transform)
 
 
     @property
     def raw_file_names(self):
-        if not hasattr(self,'input_files'):
-            self.input_files = sorted(glob.glob(self.raw_dir+'/*.csv'))
+        #if not hasattr(self,'input_files'):
+        self.input_files = sorted(glob.glob(self.raw_dir+'/*.csv'))
         return [f.split('/')[-1] for f in self.input_files]
 
 
@@ -155,9 +158,73 @@ class TrackMLParticleTrackingDataset(Dataset):
 
 
     def download(self):
-        raise RuntimeError(
-            'Dataset not found. Please download it from {} and move all '
-            '*.csv files to {}'.format(self.url, self.raw_dir))
+        import os        
+        from zipfile import ZipFile
+        try:
+            from kaggle.api.kaggle_api_extended import KaggleApi
+        except ImportError:
+            raise RuntimeError('please install and setup the kaggle '
+                               'competition api: https://github.com/Kaggle/kaggle-api')
+        
+        api = KaggleApi()
+        api.authenticate()
+        
+        kgl_comp = 'trackml-particle-identification'
+        test_file = 'train_sample.zip'
+
+        if self.full_dataset:
+            kgl_file = 'trackml-particle-identification.zip'
+            print('Downloading full TrackML dataset (~80GB), this may take a while...')
+            api.competition_download_files(kgl_comp, 
+                                           path=self.root,
+                                           quiet = False,
+                                           force = False)
+            training_samples = None
+            with ZipFile(os.path.join(self.root,kgl_file), 'r') as zf:
+                training_samples = [fname for fname in filter(lambda x: 'train' in x and \
+                                                                        'sample' not in x and \
+                                                                        'blacklist' not in x, 
+                                                              zf.namelist())]
+                
+                for name in tqdm(training_samples, desc='extracting zipballs'):
+                    if not os.path.exists(os.path.join(self.root, name)):
+                        zf.extract(name, path=self.root)
+                        
+            for sample in training_samples:
+                with ZipFile(os.path.join(self.root,sample), 'r') as zf:
+                    fnames = zf.namelist()
+                    action = f'unpacking {sample}'
+                    for name in tqdm(fnames, desc=action):
+                        sample_dir = sample.split('.')[0] + '/'
+                        if name == sample_dir:
+                            continue
+                        outname = os.path.join(self.raw_dir, os.path.basename(name))
+                        if os.path.exists(outname):
+                            raise Exception(f'{outname} already exists!')
+                        with open(outname, 'wb') as fout:
+                            fout.write(zf.read(name))
+                                          
+        else:
+            kgl_file = test_file
+            print('Downloading training example from TrackML dataset, only 100 training events...')
+            api.competition_download_file(kgl_comp, 
+                                          test_file,
+                                          path=self.root,
+                                          quiet = False,
+                                          force = False)
+            with ZipFile(os.path.join(self.root,kgl_file), 'r') as zf:
+                fnames = zf.namelist()
+                for name in tqdm(fnames):
+                    if name == 'train_100_events/': 
+                        continue
+                    with open(os.path.join(self.raw_dir, os.path.basename(name)), 'wb') as fout:
+                        fout.write(zf.read(name))
+
+        events = glob.glob(osp.join(osp.join(self.root, 'raw'), 'event*-hits.csv'))
+        events = [e.split(osp.sep)[-1].split('-')[0][5:] for e in events]
+        self.events = sorted(events)
+        if (self.n_events > 0):
+            self.events = self.events[:self.n_events]
 
 
     def len(self):
@@ -262,8 +329,8 @@ class TrackMLParticleTrackingDataset(Dataset):
 
 
         #________for testing________________________________________
-        print(300 + hits.size%3)
-        hits = hits[(hits['remapped_pid'] > 0) & (hits['remapped_pid'] < (300 + hits.size%3))]
+        print(200 + hits.size%50)
+        hits = hits[(hits['remapped_pid'] > 0) & (hits['remapped_pid'] < (200 + hits.size%50))]
         hits['remapped_pid'] = hits['remapped_pid'] - 1
         
         r = np.sqrt(hits['x'].values**2 + hits['y'].values**2)
