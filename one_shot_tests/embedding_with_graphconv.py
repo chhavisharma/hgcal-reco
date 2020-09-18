@@ -287,7 +287,8 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
             '''Update Weights'''
             if ( ((idata + 1) % config.batch_size == 0) or ((idata + 1) == config.train_samples) ):
                 opt.step()
-                sched.step(avg_loss)
+                if(config.schedLR):
+                    sched.step(avg_loss)
         
 
         '''track Epoch Updates'''
