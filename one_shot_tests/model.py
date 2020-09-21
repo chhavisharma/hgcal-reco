@@ -81,6 +81,7 @@ class SimpleEmbeddingNetwork(nn.Module):
         #     nn.Linear(interm_out, output_dim))
 
         
+        
         # edge categorization
         '''InputNetCat'''
         self.inputnet_cat =  nn.Sequential(
@@ -177,25 +178,24 @@ class SimpleEmbeddingNetwork(nn.Module):
         ''' 
         use Embedding1 to build an edge classifier
         inputnet_cat is residual to inputnet
-        '''
         x_cat = self.inputnet_cat(x) #+ x_emb
+        '''
 
         '''
         [2]
         Compute Edge Categories Convolution over Embedding1
-        '''
         for ec in self.edgecatconvs:            
             x_cat = x_cat + ec(torch.cat([x_cat, x_emb.detach(), x], dim=1), edge_index)
         
         edge_scores = self.edge_classifier(torch.cat([x_cat[edge_index[0]], 
                                                       x_cat[edge_index[1]]], 
                                                       dim=1)).squeeze()
+        '''
         
 
         '''
         use the predicted graph to generate disjoint subgraphs
         these are our physics objects
-        '''
         objects = UnionFind(x.size()[0])
         good_edges = edge_index[:,torch.argmax(edge_scores, dim=1) > 0]
         good_edges_cpu = good_edges.cpu().numpy() 
@@ -209,13 +209,14 @@ class SimpleEmbeddingNetwork(nn.Module):
         cluster_map = torch.arange(cluster_roots.size()[0], 
                                    dtype=torch.int64, 
                                    device=x.device)[inverse]
+        '''
         
 
         ''' 
         [3]
         use Embedding1 to learn segmented cluster properties 
         inputnet_cat is residual to inputnet
-        '''
+
         x_prop = self.inputnet_prop(x) #+ x_emb
         # now we accumulate over all selected disjoint subgraphs
         # to define per-object properties
@@ -223,8 +224,10 @@ class SimpleEmbeddingNetwork(nn.Module):
             x_prop = x_prop + ec(torch.cat([x_prop, x_emb.detach(), x], dim=1), good_edges)        
         props_pooled, cluster_batch = max_pool_x(cluster_map, x_prop, batch)
         cluster_props = self.property_predictor(props_pooled)    
+        '''
 
-        return out, edge_scores, edge_index, cluster_map, cluster_props, cluster_batch
+        # return out, edge_scores, edge_index, cluster_map, cluster_props, cluster_batch
+        return out, edge_index
 
 
 if __name__ == "__main__":
