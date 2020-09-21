@@ -154,6 +154,11 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
     marker_hits =    ['^','v','s','h','<','>']
     marker_centers = ['+','1','x','3','2','4']
 
+    '''Input Class +- Range'''
+    input_classes_rand = torch.randint(low = config.input_classes - config.input_class_delta, 
+                                           high= config.input_classes + config.input_class_delta+1,
+                                           size= (config.train_samples,), device=torch.device('cuda'))
+
     print('\n[TRAIN]:')
 
     t1 = timer()
@@ -184,10 +189,10 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
             d_gpu = d.to('cuda')
             y_orig = d_gpu.y
 
-            d_gpu.x = d_gpu.x[d_gpu.y < config.input_classes] 
+            d_gpu.x = d_gpu.x[d_gpu.y < input_classes_rand[idata]] 
             d_gpu.x = (d_gpu.x - torch.min(d_gpu.x, axis=0).values)/(torch.max(d_gpu.x, axis=0).values - torch.min(d_gpu.x, axis=0).values) # Normalise
-            d_gpu.y_particle_barcodes = d_gpu.y_particle_barcodes[d_gpu.y < config.input_classes]
-            d_gpu.y = d_gpu.y[d_gpu.y < config.input_classes]
+            d_gpu.y_particle_barcodes = d_gpu.y_particle_barcodes[d_gpu.y < input_classes_rand[idata]]
+            d_gpu.y = d_gpu.y[d_gpu.y < input_classes_rand[idata]]
             # plot_event(d_gpu.x.detach().cpu().numpy(), d_gpu.y.detach().cpu().numpy())
             
             '''
@@ -259,22 +264,22 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
                         ax.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                             coords[d_gpu.y == i,1].detach().cpu().numpy(),
                             coords[d_gpu.y == i,2].detach().cpu().numpy(),
-                            color=color_cycle[(i*config.k)%(config.train_samples*config.k - 1)], marker = marker_hits[i%6], s=100)
+                            color=color_cycle[(i*config.k)%(config.input_classes*config.k - 1)], marker = marker_hits[i%6], s=100)
 
                         ax.scatter(centers[i,0].detach().cpu().numpy(), 
                             centers[i,1].detach().cpu().numpy(), 
                             centers[i,2].detach().cpu().numpy(), 
-                            marker=marker_centers[i%6], color=color_cycle[(i*config.k)%(config.train_samples*config.k - 1)], s=100); 
+                            marker=marker_centers[i%6], color=color_cycle[(i*config.k)%(config.input_classes*config.k- 1)], s=100); 
                 elif config.output_dim==2:
                     for i in range(int(centers.size()[0])):
                             plt.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                                         coords[d_gpu.y == i,1].detach().cpu().numpy(),
-                                        color=color_cycle[(i*config.k)%(config.train_samples*config.k - 1)], 
+                                        color=color_cycle[(i*config.k)%(config.input_classes*config.k - 1)], 
                                         marker = marker_hits[i%6] )
 
                             plt.scatter(centers[i,0].detach().cpu().numpy(), 
                                         centers[i,1].detach().cpu().numpy(), 
-                                        color=color_cycle[(i*config.k)%(config.train_samples*config.k - 1)],  
+                                        color=color_cycle[(i*config.k)%(config.input_classes*config.k - 1)],  
                                         edgecolors='b',
                                         marker=marker_centers[i%6]) 
         
@@ -310,6 +315,7 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
             print("Epoch: {}\nLosses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
                     epoch,combo_loss_avg[epoch-start_epoch],sep_loss_avg[epoch-start_epoch][0],sep_loss_avg[epoch-start_epoch][1],sep_loss_avg[epoch-start_epoch][2]))
             print("LR: opt.param_groups \n[0]: {:.9e}  \n[1]: {:.9e}  \n[2]: {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
+            print("Track/Class Count Variation per event: {} +/- {} ".format(config.input_classes , config.input_class_delta))
             print("[TRAIN] Average Edge Accuracies over {} events: {:.5e}".format(config.train_samples,edge_acc_track.mean()) )
             print("Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
             print("Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))
@@ -318,6 +324,7 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
                 logtofile(config.plot_path, config.logfile_name, "Epoch: {}\nLosses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
                     epoch,combo_loss_avg[epoch-start_epoch],sep_loss_avg[epoch-start_epoch][0],sep_loss_avg[epoch-start_epoch][1],sep_loss_avg[epoch-start_epoch][2]))
                 logtofile(config.plot_path, config.logfile_name,"LR: opt.param_groups \n[0]: {:.9e}  \n[1]: {:.9e}  \n[2]: {:.9e}".format(opt.param_groups[0]['lr'], opt.param_groups[1]['lr'], opt.param_groups[2]['lr']))
+                logtofile(config.plot_path, config.logfile_name,"Track/Class Count Variation per event: {} +/- {} ".format(config.input_classes , config.input_class_delta))
                 logtofile(config.plot_path, config.logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(config.train_samples, config.input_classes,edge_acc_track.mean()) )                    
                 logtofile(config.plot_path, config.logfile_name,"Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
                 logtofile(config.plot_path, config.logfile_name,"Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))                
@@ -333,7 +340,8 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
                     'scheduler': sched.state_dict(),
                     'converged_embedding':False,
                     'converged_categorizer':False,
-                    'best_loss':best_loss
+                    'best_loss':best_loss,
+                    'input_classes_rand':input_classes_rand
                 }
                 checkpoint_name = 'event'+str(config.train_samples)+'_classes' + str(config.input_classes) + '_epoch'+str(epoch) + '_loss' + '{:.5e}'.format(combo_loss_avg[epoch-start_epoch]) + '_edgeAcc' + '{:.5e}'.format(edge_acc_track.mean())
                 save_checkpoint(checkpoint, is_best, config.checkpoint_path, checkpoint_name)
@@ -362,6 +370,13 @@ def testing(data, model):
     marker_hits =    ['^','v','s','h','<','>']
     marker_centers = ['+','1','x','3','2','4']
 
+
+    '''Input Class +- Range'''
+
+    input_classes_rand = torch.randint(low = config.input_classes - config.input_class_delta, 
+                                           high= config.input_classes + config.input_class_delta+1,
+                                           size= (config.train_samples,), device=torch.device('cuda'))
+
     print('\n[TEST]:')
 
     t1 = timer()
@@ -382,10 +397,10 @@ def testing(data, model):
             d_gpu = d.to('cuda')
             y_orig = d_gpu.y
 
-            d_gpu.x = d_gpu.x[d_gpu.y < config.input_classes] # just take the first three tracks
+            d_gpu.x = d_gpu.x[d_gpu.y < input_classes_rand[idata]] # just take the first three tracks
             d_gpu.x = (d_gpu.x - torch.min(d_gpu.x, axis=0).values)/(torch.max(d_gpu.x, axis=0).values - torch.min(d_gpu.x, axis=0).values) # Normalise
-            d_gpu.y_particle_barcodes = d_gpu.y_particle_barcodes[d_gpu.y < config.input_classes]
-            d_gpu.y = d_gpu.y[d_gpu.y < config.input_classes]
+            d_gpu.y_particle_barcodes = d_gpu.y_particle_barcodes[d_gpu.y < input_classes_rand[idata]]
+            d_gpu.y = d_gpu.y[d_gpu.y < input_classes_rand[idata]]
 
             '''
             project data to some nd plane where it is seperable usinfg the deep model
@@ -455,22 +470,22 @@ def testing(data, model):
                         ax.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                             coords[d_gpu.y == i,1].detach().cpu().numpy(),
                             coords[d_gpu.y == i,2].detach().cpu().numpy(),
-                            color=color_cycle[(i*config.k)%(config.test_samples*config.k - 1)], marker = marker_hits[i%6], s=100);
+                            color=color_cycle[(i*config.k)%(config.input_classes*config.k - 1)], marker = marker_hits[i%6], s=100);
 
                         ax.scatter(centers[i,0].detach().cpu().numpy(), 
                             centers[i,1].detach().cpu().numpy(), 
                             centers[i,2].detach().cpu().numpy(), 
-                            marker=marker_centers[i%6], color=color_cycle[(i*config.k)%(config.test_samples*config.k - 1)], s=100); 
+                            marker=marker_centers[i%6], color=color_cycle[(i*config.k)%(config.input_classes*config.k- 1)], s=100); 
                 elif config.output_dim==2:
                     for i in range(int(centers.size()[0])):
                             plt.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                                         coords[d_gpu.y == i,1].detach().cpu().numpy(),
-                                        color=color_cycle[(i*config.k)%(config.test_samples*config.k - 1)], 
+                                        color=color_cycle[(i*config.k)%(config.input_classes*config.k- 1)], 
                                         marker = marker_hits[i%6] )
 
                             plt.scatter(centers[i,0].detach().cpu().numpy(), 
                                         centers[i,1].detach().cpu().numpy(), 
-                                        color=color_cycle[(i*config.k)%(config.test_samples*config.k - 1)],  
+                                        color=color_cycle[(i*config.k)%(config.input_classes*config.k - 1)],  
                                         edgecolors='b',
                                         marker=marker_centers[i%6]) 
         
@@ -491,6 +506,7 @@ def testing(data, model):
         print('--------------------')
         print("Losses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
                 combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+        print("Track/Class Count Variation per event: {} +/- {} ".format(config.input_classes , config.input_class_delta) )                    
         print("[TEST] Average Edge Accuracies over {} events: {:.5e}".format(config.test_samples,edge_acc_track.mean()) )
         print("Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
         print("Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))
@@ -498,6 +514,7 @@ def testing(data, model):
         logtofile(config.plot_path, config.logfile_name,'\nTEST:')
         logtofile(config.plot_path, config.logfile_name, "Losses:\nCombined: {:.5e}\nHinge_distance: {:.5e}\nCrossEntr_Edges: {:.5e}\nMSE_centers: {:.5e}".format(
                                                                 combo_loss_avg[epoch],sep_loss_avg[epoch][0],sep_loss_avg[epoch][1],sep_loss_avg[epoch][2]))
+        logtofile(config.plot_path, config.logfile_name,"Track/Class Count Variation per event: {} +/- {} ".format(config.input_classes , config.input_class_delta))
         logtofile(config.plot_path, config.logfile_name,"Average Edge Accuracies over {} events, {} Tracks: {:.5e}".format(config.test_samples,config.input_classes,edge_acc_track.mean()) )                    
         logtofile(config.plot_path, config.logfile_name,"Total true edges [class_0: {:6d}] [class_1: {:6d}]".format(total_true_0_1[0],total_true_0_1[1]))
         logtofile(config.plot_path, config.logfile_name,"Total pred edges [class_0: {:6d}] [class_1: {:6d}]".format(total_pred_0_1[0],total_pred_0_1[1]))

@@ -17,12 +17,13 @@ logfile_name_test = 'testing.log'
 
 total_epochs  = 500
 train_samples = 500
-batch_size    = 10 # this is a batch by hand so be careful
+batch_size    = 10 #this is a batch by hand so be careful
 test_samples  = 100
 input_classes = 50
+input_class_delta = 10
 
 plot_dir_root   = './plots/'
-plot_dir_name   = 'train_event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)
+plot_dir_name   = 'train_event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)+'_delta'+str(input_class_delta)
 plot_path       = plot_dir_root+plot_dir_name+'/'
 
 # Save Checkpoints Path
