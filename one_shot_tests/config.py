@@ -27,11 +27,11 @@ volume_layer_ids = [
 ]
 full_dataset = False
 
-load_checkpoint_path = '/home/csharma/workspace/hgcal-reco/one_shot_tests/checkpoints/train_event1000_epoch500_classes400_delta20/event1000_classes400_epoch430_loss7.79386e-02_edgeAcc9.25365e-01_checkpoint.pt'
+load_checkpoint_path = './checkpoints/train_event1000_epoch500_classes400_delta20/event1000_classes400_epoch430_loss7.79386e-02_edgeAcc9.25365e-01_checkpoint.pt'
 logfile_name = 'training.log'
 testing_mode = False
 
-total_epochs  = 70 # already did 430
+total_epochs  = 500
 train_samples = 1000
 batch_size    = 20 #this is a batch by hand so be careful | needs to be a factor of train size
 test_samples  = 500
