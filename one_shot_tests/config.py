@@ -31,15 +31,16 @@ load_checkpoint_path = './checkpoints/train_event1000_epoch500_classes400_delta2
 logfile_name = 'training.log'
 testing_mode = False
 
-total_epochs  = 500
+total_epochs  = 70 # was 430 earlier
 train_samples = 1000
 batch_size    = 20 #this is a batch by hand so be careful | needs to be a factor of train size
 test_samples  = 500
 input_classes = 400
 input_class_delta = 20  # sqrt(input_classes)
 
+dir_prefix      = 'test_event'+str(test_samples) if testing_mode else 'train_event'+str(train_samples)
 plot_dir_root   = './plots/'
-plot_dir_name   = 'train_event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)+'_delta'+str(input_class_delta)
+plot_dir_name   = dir_prefix + '_epoch'+str(total_epochs)+'_classes'+str(input_classes)+'_delta'+str(input_class_delta)
 plot_path       = plot_dir_root+plot_dir_name+'/'
 
 # Save Checkpoints Path
