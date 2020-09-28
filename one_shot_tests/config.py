@@ -1,3 +1,20 @@
+'''
+==========================================
+[CONFIG INSTRUCTIONS]
+
+-> To train from scratch, set
+load_checkpoint_path = False
+
+-> To load checkpoint and resume training, set
+load_checkpoint_path = <path_to_checkpoint>
+epochs = <remaining number of epochs to train>
+
+-> To run only tests, set
+load_checkpoint_path = <path_to_checkpoint>
+testing_mode = True
+==========================================
+'''
+
 from os.path import expanduser
 home = expanduser("~")
 
@@ -10,17 +27,16 @@ volume_layer_ids = [
 ]
 full_dataset = False
 
-load_checkpoint_path = False
-
+load_checkpoint_path = '/home/csharma/workspace/hgcal-reco/one_shot_tests/checkpoints/train_event1000_epoch500_classes400_delta20/event1000_classes400_epoch430_loss7.79386e-02_edgeAcc9.25365e-01_checkpoint.pt'
 logfile_name = 'training.log'
-logfile_name_test = 'testing.log'
+testing_mode = False
 
-total_epochs  = 500
-train_samples = 500
-batch_size    = 10 #this is a batch by hand so be careful
-test_samples  = 100
-input_classes = 50
-input_class_delta = 10
+total_epochs  = 70 # already did 430
+train_samples = 1000
+batch_size    = 20 #this is a batch by hand so be careful | needs to be a factor of train size
+test_samples  = 500
+input_classes = 400
+input_class_delta = 20  # sqrt(input_classes)
 
 plot_dir_root   = './plots/'
 plot_dir_name   = 'train_event'+str(train_samples)+'_epoch'+str(total_epochs)+'_classes'+str(input_classes)+'_delta'+str(input_class_delta)

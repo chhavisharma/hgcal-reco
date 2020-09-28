@@ -25,13 +25,14 @@ def save_checkpoint(model_state, is_best, checkpoint_dir, checkpoint_name):
 
 def load_checkpoint(load_checkpoint_path, model, optimizer, scheduler):
 
-    checkpoint = torch.load(config.load_checkpoint_path)
+    checkpoint = torch.load(load_checkpoint_path)
     model.load_state_dict(checkpoint['state_dict'])
     optimizer.load_state_dict(checkpoint['optimizer'])
     scheduler.load_state_dict(checkpoint['scheduler'])
+    input_classes_rand=checkpoint['input_classes_rand']
 
     return model, optimizer, scheduler, checkpoint['epoch'], checkpoint['converged_categorizer'], \
-                                    checkpoint['converged_embedding'], checkpoint['best_loss'] 
+                                    checkpoint['converged_embedding'], checkpoint['best_loss'], input_classes_rand 
 
 
 def plot_event(my_data,y_t):
@@ -48,6 +49,6 @@ def plot_event(my_data,y_t):
     ax1.scatter3D(z, y, x, s=10, color= m.to_rgba(y_t), edgecolors='black')      
 
     ctr=0
-    plt.savefig(config.plot_path+'event_'+str(ctr)+'.pdf') 
+    # plt.savefig(config.plot_path+'event_'+str(ctr)+'.pdf') 
 
     plt.close(fig)

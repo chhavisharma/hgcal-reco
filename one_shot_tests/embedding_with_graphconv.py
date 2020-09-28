@@ -141,7 +141,7 @@ def match_cluster_targets(clusters, truth_clusters, data):
 
 def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, \
             lr_threshold_1, lr_threshold_2, converged_embedding, converged_categorizer, 
-            start_epoch, best_loss):
+            start_epoch, best_loss, input_classes_rand=None):
 
     model.train()
 
@@ -154,10 +154,11 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
     marker_hits =    ['^','v','s','h','<','>']
     marker_centers = ['+','1','x','3','2','4']
 
-    '''Input Class +- Range'''
-    input_classes_rand = torch.randint(low = config.input_classes - config.input_class_delta, 
-                                           high= config.input_classes + config.input_class_delta+1,
-                                           size= (config.train_samples,), device=torch.device('cuda'))
+    if(input_classes_rand!=None):
+        '''Input Class +- Range'''
+        input_classes_rand = torch.randint(low = config.input_classes - config.input_class_delta, 
+                                            high= config.input_classes + config.input_class_delta+1,
+                                            size= (config.train_samples,), device=torch.device('cuda'))
 
     print('\n[TRAIN]:')
 
@@ -204,7 +205,6 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
             #-------------- LINDSEY TRAINING VERSION ------------------         
             '''Compute latent space distances'''
             d_hinge, y_hinge = center_embedding_truth(coords, d_gpu.y, device='cuda')
-            # multi_simple_hinge += simple_embedding_truth(coords_interm, d_gpu.y, device='cuda')
             
             '''Compute centers in latent space '''
             centers = scatter_mean(coords, d_gpu.y, dim=0, dim_size=(torch.max(d_gpu.y).item()+1))
@@ -605,36 +605,65 @@ if __name__ == "__main__":
     converged_categorizer = False
     start_epoch = 0
     best_loss = np.inf
+    input_classes_rand = None
 
     if (config.load_checkpoint_path != False):
-        model, opt, sched, start_epoch, converged_categorizer, converged_embedding, best_loss = \
+        model, opt, sched, start_epoch, converged_categorizer, converged_embedding, best_loss, input_classes_rand = \
                                             load_checkpoint(config.load_checkpoint_path, model, opt, sched)
         print('\nloaded checkpoint:')
         print('\tstart_epoch :',start_epoch)
         print('\tbest_loss   :',best_loss)
         logtofile(config.plot_path, config.logfile_name, '\nloaded checkpoint with start epoch {} and loss {} \n'.format(start_epoch,best_loss))
 
+    
+    if(config.testing_mode==False):
 
-    ''' Train '''
-    combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties, edge_acc_conf = training(data, model, opt, sched, \
-                                                                        lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, \
-                                                                        lr_threshold_1, lr_threshold_2, converged_embedding, \
-                                                                        converged_categorizer, start_epoch, best_loss)
+        ''' Train '''
+        combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties, edge_acc_conf = training(data, model, opt, sched, \
+                                                                            lr_param_gp_1, lr_param_gp_2, lr_param_gp_3, \
+                                                                            lr_threshold_1, lr_threshold_2, converged_embedding, \
+                                                                            converged_categorizer, start_epoch, best_loss, input_classes_rand)
+
+        '''Save Stats'''
+        training_dict = {  
+            'Combined_loss':combo_loss_avg,
+            'Seperate_loss':sep_loss_avg,
+            'Edge_Accuracies': edge_acc_track,
+            'Pred_cluster_prop':pred_cluster_properties,
+            'Edge_acc_conf_matrix':edge_acc_conf
+        }
+        with open(config.plot_path+'/training.pickle', 'wb') as handle:
+            pickle.dump(training_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+
+
+        '''Learning Curve / Clusters / Centers'''
+        if(config.make_plots==True):
+
+            '''Plot Learning Curve'''
+            fig = plt.figure(figsize=(20,10))
+            ax1 = fig.add_subplot(121)
+            ax1.plot(np.arange(start_epoch, start_epoch+config.total_epochs), [x[0] for x in sep_loss_avg], color='brown', linewidth=1, label="Hinge")
+            ax1.plot(np.arange(start_epoch, start_epoch+config.total_epochs), [x[1] for x in sep_loss_avg], color='green', linewidth=1, label="CrossEntropy")
+            ax1.set_xlabel("Epochs")
+            ax1.set_ylabel("Losses")
+            ax1.legend()
+
+            ax2 = fig.add_subplot(122)
+            ax2.plot(np.arange(start_epoch, start_epoch+config.total_epochs), [x[2] for x in sep_loss_avg], color='olive', linewidth=1, label="MSE")
+            ax2.plot(np.arange(start_epoch, start_epoch+config.total_epochs), combo_loss_avg, color='red', linewidth=2, label="Combined")
+            ax2.set_xlabel("Epochs")
+            ax2.set_ylabel("Losses")
+            ax2.legend()
+
+            plt.title(config.plot_dir_name)
+            ax1.set_title(config.plot_dir_name+': indivudual losses')
+            ax2.set_title(config.plot_dir_name+': combined loss')
+            plt.savefig(config.plot_path + config.plot_dir_name+'_Learning_curve.pdf')
+            plt.close(fig)
+
 
     ''' Test '''
     test_combo_loss_avg, test_sep_loss_avg, test_edge_acc_track, test_pred_cluster_properties, test_edge_acc_conf = testing(data, model)    
-
-
-    '''Save Stats'''
-    training_dict = {  
-        'Combined_loss':combo_loss_avg,
-        'Seperate_loss':sep_loss_avg,
-        'Edge_Accuracies': edge_acc_track,
-        'Pred_cluster_prop':pred_cluster_properties,
-        'Edge_acc_conf_matrix':edge_acc_conf
-    }
-    with open(config.plot_path+'/training.pickle', 'wb') as handle:
-        pickle.dump(training_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
 
     testing_dict = {  
         'Combined_loss':test_combo_loss_avg,
@@ -645,29 +674,3 @@ if __name__ == "__main__":
     }
     with open(config.plot_path+'/testing.pickle', 'wb') as handle:
         pickle.dump(training_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
-
-
-    '''Learning Curve / Clusters / Centers'''
-    if(config.make_plots==True):
-
-        '''Plot Learning Curve'''
-        fig = plt.figure(figsize=(20,10))
-        ax1 = fig.add_subplot(121)
-        ax1.plot(np.arange(start_epoch, start_epoch+config.total_epochs), [x[0] for x in sep_loss_avg], color='brown', linewidth=1, label="Hinge")
-        ax1.plot(np.arange(start_epoch, start_epoch+config.total_epochs), [x[1] for x in sep_loss_avg], color='green', linewidth=1, label="CrossEntropy")
-        ax1.set_xlabel("Epochs")
-        ax1.set_ylabel("Losses")
-        ax1.legend()
-
-        ax2 = fig.add_subplot(122)
-        ax2.plot(np.arange(start_epoch, start_epoch+config.total_epochs), [x[2] for x in sep_loss_avg], color='olive', linewidth=1, label="MSE")
-        ax2.plot(np.arange(start_epoch, start_epoch+config.total_epochs), combo_loss_avg, color='red', linewidth=2, label="Combined")
-        ax2.set_xlabel("Epochs")
-        ax2.set_ylabel("Losses")
-        ax2.legend()
-
-        plt.title(config.plot_dir_name)
-        ax1.set_title(config.plot_dir_name+': indivudual losses')
-        ax2.set_title(config.plot_dir_name+': combined loss')
-        plt.savefig(config.plot_path + config.plot_dir_name+'_Learning_curve.pdf')
-        plt.close(fig)
