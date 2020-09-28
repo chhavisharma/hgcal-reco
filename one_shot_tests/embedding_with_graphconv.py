@@ -673,4 +673,4 @@ if __name__ == "__main__":
         'Edge_acc_conf_matrix':test_edge_acc_conf
     }
     with open(config.plot_path+'/testing.pickle', 'wb') as handle:
-        pickle.dump(training_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+        pickle.dump(testing_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
