@@ -1,0 +1,70 @@
+
+Start time: 28/09/2020 18:31:58
+
+CONFIG: train_event1000_epoch70_classes400_delta20
+Epochs:70
+Events:1000
+Tracks: 400
+Batch Size: 20
+MODEL:
+InputDim=3
+HiddenDim=32
+OutputDim=3
+config.interm_out=None
+NcatsOut=2
+NPropsOut=3
+ConvDepth=3
+KNN_k=8
+EdgeCatDepth=6
+LEARNING RATE:
+Paramgp1:1.000e-03
+Paramgp2:1.000e-03
+Paramgp3:1.000e-03
+threshold_1=1.000e-04
+threshold_2=7.500e-04
+
+
+loaded checkpoint with start epoch 431 and loss 0.07793858727440238 
+
+Epoch: 431
+Losses:
+Combined: 7.60806e-02
+Hinge_distance: 3.26274e-04
+CrossEntr_Edges: 7.41499e-03
+MSE_centers: 6.83394e-02
+LR: opt.param_groups 
+[0]: 1.000000000e-03  
+[1]: 1.000000000e-03  
+[2]: 1.000000000e-03
+Track/Class Count Variation per event: 400 +/- 20 
+Average Edge Accuracies over 1000 events, 400 Tracks: 9.42056e-01
+Total true edges [class_0: 299374] [class_1: 4503130]
+Total pred edges [class_0: 174446] [class_1: 4628058]
+--------------------------
+Epoch: 500
+Losses:
+Combined: 7.24303e-02
+Hinge_distance: 2.64086e-04
+CrossEntr_Edges: 5.70909e-03
+MSE_centers: 6.64571e-02
+LR: opt.param_groups 
+[0]: 1.000000000e-03  
+[1]: 1.000000000e-03  
+[2]: 1.000000000e-03
+Track/Class Count Variation per event: 400 +/- 20 
+Average Edge Accuracies over 1000 events, 400 Tracks: 9.54472e-01
+Total true edges [class_0: 274778] [class_1: 5015678]
+Total pred edges [class_0: 127886] [class_1: 5162570]
+--------------------------
+
+TEST:
+Losses:
+Combined: 7.46999e-02
+Hinge_distance: 2.65116e-04
+CrossEntr_Edges: 6.22684e-03
+MSE_centers: 6.82080e-02
+Track/Class Count Variation per event: 400 +/- 20 
+Average Edge Accuracies over 500 events, 400 Tracks: 9.48510e-01
+Total true edges [class_0: 162257] [class_1: 2561338]
+Total pred edges [class_0:  70392] [class_1: 2653203]
+--------------------------

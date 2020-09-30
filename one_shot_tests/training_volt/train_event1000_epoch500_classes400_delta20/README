@@ -1,0 +1,7 @@
+Expriment with 400+20 tracks :
+-died at 430 epochs
+- was relaunched for 70 more epochs
+-the pickle files only contain information from the last 70 epochs
+
+
+
