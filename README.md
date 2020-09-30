@@ -10,11 +10,6 @@ Experiments with end-to-end reconstruction/segmentation/regression model design,
 Dataset: [kaggle page](https://www.kaggle.com/c/trackml-particle-identification/overview)\
 Experiments: [one_shot_tests](one_shot_tests/embedding_with_graphconv.py)
 
-Archive:\
-[Presentation Slides](https://docs.google.com/presentation/d/1WW9HBwumZRxsq518BsyRxTFi64VcT6rng09rtjOeNRk/edit?usp=sharing)\
-[Code](https://github.com/chhavisharma/hgcal_ldrd/tree/gravnet2_wip_trainer_args)\
-[Experiment Sheets](https://docs.google.com/spreadsheets/d/1euJGMCJdFs_eDy_KjZnsMze26StiSDS9xHrTFlMHnYE/edit?usp=sharing)
-
 ### Installation
 
 To get all necessary software please run `install.sh`!
