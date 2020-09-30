@@ -33,6 +33,9 @@ from torch_geometric.utils.undirected import to_undirected
 from torch_geometric.nn import EdgeConv
 from torch_geometric.typing import OptTensor, PairTensor
 
+import numba as nb
+from numba.typed import List
+
 '''File Imports'''
 import config
 from utils import logtofile, save_checkpoint, load_checkpoint
@@ -70,9 +73,6 @@ def center_embedding_truth(coords, truth_label_by_hits, device='cpu'):
     return (dists_out, truth_out)
 
     return out_truths
-
-import numba as nb
-from numba.typed import List
 
 @nb.njit()
 def build_cluster_list(indices, clusters, labels):
@@ -150,11 +150,11 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
     pred_cluster_properties = []
     edge_acc_track = np.zeros(config.train_samples, dtype=np.float)
     
-    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,config.input_classes*config.k))
+    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,(config.input_classes+config.input_class_delta)*config.k))
     marker_hits =    ['^','v','s','h','<','>']
     marker_centers = ['+','1','x','3','2','4']
 
-    if(input_classes_rand!=None):
+    if(input_classes_rand==None):
         '''Input Class +- Range'''
         input_classes_rand = torch.randint(low = config.input_classes - config.input_class_delta, 
                                             high= config.input_classes + config.input_class_delta+1,
@@ -255,8 +255,8 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
                                             (1./props_pt), (1./props_eta), (1./props_phi)])
 
             '''Plot Training Clusters'''
-            # if (config.make_plots==True):
-            if (config.make_plots==True and (epoch==0 or epoch==start_epoch+config.total_epochs-1) and idata%(config.train_samples/10)==0):     
+            # if (config.make_train_plots==True):
+            if (config.make_train_plots==True and (epoch==0 or epoch==start_epoch+config.total_epochs-1) and idata%(config.train_samples/10)==0):     
                 fig = plt.figure(figsize=(8,8))
                 if config.output_dim==3:
                     ax = fig.add_subplot(111, projection='3d')
@@ -264,22 +264,22 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
                         ax.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                             coords[d_gpu.y == i,1].detach().cpu().numpy(),
                             coords[d_gpu.y == i,2].detach().cpu().numpy(),
-                            color=color_cycle[(i*config.k)%(config.input_classes*config.k - 1)], marker = marker_hits[i%6], s=100)
+                            color=color_cycle[(i*config.k)%((config.input_classes+config.input_class_delta)*config.k - 1)], marker = marker_hits[i%6], s=100)
 
                         ax.scatter(centers[i,0].detach().cpu().numpy(), 
                             centers[i,1].detach().cpu().numpy(), 
                             centers[i,2].detach().cpu().numpy(), 
-                            marker=marker_centers[i%6], color=color_cycle[(i*config.k)%(config.input_classes*config.k- 1)], s=100); 
+                            marker=marker_centers[i%6], color=color_cycle[(i*config.k)%((config.input_classes+config.input_class_delta)*config.k- 1)], s=100); 
                 elif config.output_dim==2:
                     for i in range(int(centers.size()[0])):
                             plt.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                                         coords[d_gpu.y == i,1].detach().cpu().numpy(),
-                                        color=color_cycle[(i*config.k)%(config.input_classes*config.k - 1)], 
+                                        color=color_cycle[(i*config.k)%((config.input_classes+config.input_class_delta)*config.k - 1)], 
                                         marker = marker_hits[i%6] )
 
                             plt.scatter(centers[i,0].detach().cpu().numpy(), 
                                         centers[i,1].detach().cpu().numpy(), 
-                                        color=color_cycle[(i*config.k)%(config.input_classes*config.k - 1)],  
+                                        color=color_cycle[(i*config.k)%((config.input_classes+config.input_class_delta)*config.k - 1)],  
                                         edgecolors='b',
                                         marker=marker_centers[i%6]) 
         
@@ -356,6 +356,127 @@ def training(data, model, opt, sched, lr_param_gp_1, lr_param_gp_2, lr_param_gp_
 
     return combo_loss_avg, sep_loss_avg, edge_acc_track, pred_cluster_properties, edge_acc_conf
 
+def plot_properties_efficiency(pt_true ,matched_pt_true, pred_pt, eta_true, matched_eta_true, pred_eta, \
+                             phi_true, matched_phi_true, pred_phi, nhits_true, matched_nhits_true):
+    
+    # to get below pip install coffea
+    from coffea import hist
+    from coffea.hist import Bin,Hist
+
+    pt_bins = np.concatenate( (np.linspace(0,1,num=7)[:-1], np.linspace(1,2,num=3)[:-1], np.linspace(2,10,num=4)) )
+    eta_bins = np.linspace(-5,5,num=10)
+    phi_bins = np.linspace(-math.pi,math.pi,num=10)
+    nhits_bins = np.linspace(0, 17, num=17)
+
+    pt_truth = Hist("Counts", Bin("pt", r"$p_{T}$ (GeV)", pt_bins))
+    matched_pt_truth = Hist("Counts", Bin("pt", r"$p_{T}$ (GeV)", pt_bins))
+
+    eta_truth = Hist("Counts", Bin("eta", r"$\eta$", eta_bins))
+    matched_eta_truth = Hist("Counts", Bin("eta", r"$\eta$", eta_bins))
+
+    phi_truth = Hist("Counts", Bin("phi", r"$\varphi$", phi_bins))
+    matched_phi_truth = Hist("Counts", Bin("phi", r"$\varphi$", phi_bins))
+
+    nhits_truth = Hist("Counts", Bin("nhits", r"$N_{hits}$", nhits_bins))
+    matched_nhits_truth = Hist("Counts", Bin("nhits", r"$N_{hits}$", nhits_bins))
+
+    # eta_truth_lim = Hist("Counts", Bin("eta", r"$\eta_{lim}$", eta_bins))
+    # matched_eta_truth_lim = Hist("Counts", Bin("eta", r"$\eta_{lim}$", eta_bins))
+
+    pt_true = np.array(pt_true)
+    matched_pt_true = np.array(matched_pt_true)
+
+    eta_true = np.array(eta_true)
+    matched_eta_true = np.array(matched_eta_true)
+
+    phi_true = np.array(phi_true)
+    matched_phi_true = np.array(matched_phi_true)
+
+    nhits_true = np.array(nhits_true)
+    matched_nhits_true = np.array(matched_nhits_true)
+
+    # eta_true_lim = np.array(nhits_true[pt_true>0.5]) 
+    # matched_eta_true_lim = np.array(matched_eta_true[matched_pt_true>0.5])
+
+    pt_truth.fill(pt=pt_true)
+    matched_pt_truth.fill(pt=matched_pt_true)
+
+    eta_truth.fill(eta=eta_true)
+    matched_eta_truth.fill(eta=matched_eta_true)
+
+    phi_truth.fill(phi=phi_true)
+    matched_phi_truth.fill(phi=matched_phi_true)
+
+    nhits_truth.fill(nhits=nhits_true)
+    matched_nhits_truth.fill(nhits=matched_nhits_true)
+
+    # eta_truth_lim.fill(eta=eta_true_lim)
+    # matched_eta_truth_lim.fill(eta=matched_eta_true_lim)
+
+    plt.rcParams.update({
+        'font.size': 14,
+        'axes.titlesize': 18,
+        'axes.labelsize': 18,
+        'xtick.labelsize': 12,
+        'ytick.labelsize': 12
+    })
+
+    fig, ax = plt.subplots(2, 2, figsize=(20, 20))
+
+    matched_pt_truth.label = r'$\epsilon$'
+    hist.plotratio(num=matched_pt_truth, denom=pt_truth, 
+                error_opts={'marker': '.'},
+                unc='clopper-pearson',
+                ax=ax[0,0]
+                )
+    ax[0,0].set_xlim(0.1, 10)
+    ax[0,0].set_xscale('log')
+    ax[0,0].set_ylim(0, 1.1)
+
+
+    matched_eta_truth.label = r'$\epsilon$'
+    hist.plotratio(num=matched_eta_truth, denom=eta_truth, 
+                error_opts={'marker': '.'},
+                unc='clopper-pearson',
+                ax=ax[0,1]
+                )
+    ax[0,1].set_xlim(-5, 5)
+    ax[0,1].set_ylim(0, 1.1)
+
+
+    matched_phi_truth.label = r'$\epsilon$'
+    hist.plotratio(num=matched_phi_truth, denom=phi_truth, 
+                error_opts={'marker': '.'},
+                unc='clopper-pearson',
+                ax=ax[1,0]
+                )
+    ax[1,0].set_xlim(-math.pi, math.pi)
+    ax[1,0].set_ylim(0, 1.1)
+
+    matched_nhits_truth.label = r'$\epsilon$'
+    hist.plotratio(num=matched_nhits_truth, denom=nhits_truth, 
+                error_opts={'marker': '.'},
+                unc='clopper-pearson',
+                ax=ax[1,1]
+                )
+    ax[1,1].set_xlim(0, 18)
+    ax[1,1].set_ylim(0, 1.1)
+
+
+    # matched_eta_truth_lim.label = r'$\epsilon$'
+    # hist.plotratio(num=matched_eta_truth_lim, denom=eta_truth_lim, 
+    #             error_opts={'marker': '.'},
+    #             unc='clopper-pearson',
+    #             ax=ax[2,0]
+    #             )
+    # ax[2,0].set_xlim(-5, 5)
+    # ax[2,0].set_ylim(0, 1.1)
+
+    # pdb.set_trace()
+
+    plt.savefig(config.plot_path+'test_plot_property_efficiencies.pdf')   
+    plt.close(fig)
+
 def testing(data, model):
 
     model.eval()
@@ -366,16 +487,19 @@ def testing(data, model):
     edge_acc_track = np.zeros(config.test_samples, dtype=np.float)
     
     
-    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,config.input_classes*config.k))
+    color_cycle = plt.cm.coolwarm(np.linspace(0.1,0.9,(config.input_classes+config.input_class_delta)*config.k))
     marker_hits =    ['^','v','s','h','<','>']
     marker_centers = ['+','1','x','3','2','4']
 
 
     '''Input Class +- Range'''
 
-    input_classes_rand = torch.randint(low = config.input_classes - config.input_class_delta, 
-                                           high= config.input_classes + config.input_class_delta+1,
-                                           size= (config.train_samples,), device=torch.device('cuda'))
+    # input_classes_rand = torch.randint(low = config.input_classes - config.input_class_delta, 
+    #                                        high= config.input_classes + config.input_class_delta+1,
+    #                                        size= (config.train_samples,), device=torch.device('cuda'))
+    
+    # should be mean number of tracks + maximum variation.
+    input_classes_rand = (config.input_classes + config.input_class_delta) * torch.ones(size=(config.train_samples,),device=torch.device('cuda'), dtype=torch.int)
 
     print('\n[TEST]:')
 
@@ -391,6 +515,22 @@ def testing(data, model):
         edge_acc_conf  = np.zeros((config.test_samples,config.ncats_out,config.ncats_out), dtype=np.int)
         pred_cluster_properties = []
         avg_loss = 0
+
+        if(config.make_test_efficiency_plots==True):
+            pt_true = []
+            matched_pt_true = []
+            pred_pt = []
+
+            eta_true = []
+            matched_eta_true = []
+            pred_eta = []
+
+            phi_true = []
+            matched_phi_true = []
+            pred_phi = []
+
+            nhits_true = []
+            matched_nhits_true = []
 
         for idata, d in enumerate(data[config.train_samples:config.train_samples+config.test_samples]):            
             
@@ -461,7 +601,7 @@ def testing(data, model):
                                             (1./props_pt), (1./props_eta), (1./props_phi)])
 
             '''Plot test clusters'''
-            if (config.make_test_plots==True):
+            if (config.make_test_plots==True and idata%(config.test_samples/10)==0):
                 
                 fig = plt.figure(figsize=(8,8))
                 if config.output_dim==3:
@@ -470,29 +610,69 @@ def testing(data, model):
                         ax.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                             coords[d_gpu.y == i,1].detach().cpu().numpy(),
                             coords[d_gpu.y == i,2].detach().cpu().numpy(),
-                            color=color_cycle[(i*config.k)%(config.input_classes*config.k - 1)], marker = marker_hits[i%6], s=100);
+                            color=color_cycle[(i*config.k)%((config.input_classes+config.input_class_delta)*config.k - 1)], marker = marker_hits[i%6], s=100);
 
                         ax.scatter(centers[i,0].detach().cpu().numpy(), 
                             centers[i,1].detach().cpu().numpy(), 
                             centers[i,2].detach().cpu().numpy(), 
-                            marker=marker_centers[i%6], color=color_cycle[(i*config.k)%(config.input_classes*config.k- 1)], s=100); 
+                            marker=marker_centers[i%6], color=color_cycle[(i*config.k)%((config.input_classes+config.input_class_delta)*config.k- 1)], s=100); 
                 elif config.output_dim==2:
                     for i in range(int(centers.size()[0])):
                             plt.scatter(coords[d_gpu.y == i,0].detach().cpu().numpy(), 
                                         coords[d_gpu.y == i,1].detach().cpu().numpy(),
-                                        color=color_cycle[(i*config.k)%(config.input_classes*config.k- 1)], 
+                                        color=color_cycle[(i*config.k)%((config.input_classes+config.input_class_delta)*config.k- 1)], 
                                         marker = marker_hits[i%6] )
 
                             plt.scatter(centers[i,0].detach().cpu().numpy(), 
                                         centers[i,1].detach().cpu().numpy(), 
-                                        color=color_cycle[(i*config.k)%(config.input_classes*config.k - 1)],  
+                                        color=color_cycle[(i*config.k)%((config.input_classes+config.input_class_delta)*config.k - 1)],  
                                         edgecolors='b',
                                         marker=marker_centers[i%6]) 
         
                 plt.title('test_plot_'+'_ex_'+str(idata)+'_EdgeAcc_'+str('{:.5e}'.format(edge_accuracy)))
                 plt.savefig(config.plot_path+'test_plot_'+'_ex_'+str(idata)+'.pdf')   
                 plt.close(fig)
-        
+
+            '''Plot properties' efficiency'''
+            if (config.make_test_efficiency_plots==True):
+                first_n_tracks = d.y < input_classes_rand[idata]
+                n_clusters     = d.y[first_n_tracks].max().item() + 1
+
+                track_lengths = []
+                true_lengths = []
+
+                # print(cluster_props.size())
+                # print(n_clusters)
+
+                for i in range(n_clusters):
+                    mapped_i = pred_cluster_match[i].item()
+                    r = d_gpu.x[cluster_map == mapped_i,0].cpu().detach().numpy()
+                    r_true = d_gpu.x[d_gpu.y == i,0].cpu().detach().numpy()
+                    phi = d_gpu.x[cluster_map == mapped_i,1].cpu().detach().numpy()
+                    z = d_gpu.x[cluster_map == mapped_i,2].cpu().detach().numpy()
+                
+                    track_lengths.append(r.shape[0])
+                    true_lengths.append(r_true.shape[0])
+                
+                    if r_true.shape[0] > 1:
+                        pt_true.append(1/y_properties[i,0].item())
+                        eta_true.append(y_properties[i,1].item())
+                        phi_true.append(y_properties[i,2].item())
+                        nhits_true.append(r_true.shape[0])
+                        if r.shape[0] > 1:
+                            matched_pt_true.append(1/y_properties[i,0].item())
+                            pred_pt.append(1./F.softplus(cluster_props[mapped_i,0]).item())
+                            matched_eta_true.append(y_properties[i,1].item())
+                            pred_eta.append(5.0*(2*torch.sigmoid(cluster_props[mapped_i,1]) - 1))
+                            matched_phi_true.append(y_properties[i,2].item())
+                            pred_phi.append(math.pi*(2*torch.sigmoid(cluster_props[mapped_i,2]) - 1))
+                            matched_nhits_true.append(r_true.shape[0])
+
+
+        if (config.make_test_efficiency_plots==True):
+            plot_properties_efficiency(pt_true ,matched_pt_true, pred_pt, eta_true, matched_eta_true, pred_eta,
+                                        phi_true, matched_phi_true, pred_phi, nhits_true, matched_nhits_true)
+
         '''track test Updates'''
         combo_loss_avg.append(avg_loss_track.mean())
         sep_loss_avg.append([sep_loss_track[:,0].mean(), sep_loss_track[:,1].mean(), sep_loss_track[:,2].mean()])
@@ -580,22 +760,24 @@ if __name__ == "__main__":
     sched = torch.optim.lr_scheduler.ReduceLROnPlateau(opt, factor=config.reduceLR_factor, patience=config.reduceLR_patience)
 
     print('[CONFIG]')
-    print('Epochs   : ', config.total_epochs)
-    print('Samples  : ', config.train_samples)
-    print('TrackKind: ', config.input_classes)
-    print('BatchSize: ', config.batch_size)    
-    print('InputdDim: ', config.input_dim)
-    print('HiddenDim: ', config.hidden_dim)
-    print('OutputDim: ', config.output_dim)
-    print('IntermOut: ', config.interm_out)
-    print('NCatsOut : ', config.ncats_out)
-    print('NPropOut : ', config.nprops_out)
+    print('Epochs       : ', config.total_epochs)
+    print('TrainSamples : ', config.train_samples)
+    print('TestSamples  : ', config.test_samples)
+    print('TrackKind    : ', config.input_classes)
+    print('TrackDelta   : ', config.input_class_delta)
+    print('BatchSize    : ', config.batch_size)    
+    print('InputdDim    : ', config.input_dim)
+    print('HiddenDim    : ', config.hidden_dim)
+    print('OutputDim    : ', config.output_dim)
+    print('IntermOut    : ', config.interm_out)
+    print('NCatsOut     : ', config.ncats_out)
+    print('NPropOut     : ', config.nprops_out)
 
     print('Model Parameters (trainable):',  sum(p.numel() for p in model.parameters() if p.requires_grad))
 
 
     logtofile(config.plot_path, config.logfile_name, '\nStart time: '+datetime.now().strftime("%d/%m/%Y %H:%M:%S"))
-    logtofile(config.plot_path, config.logfile_name, "\nCONFIG: {}\nEpochs:{}\nEvents:{}\nTracks: {}\nBatch Size: {}".format(config.plot_dir_name, config.total_epochs, config.train_samples, config.input_classes, config.batch_size))
+    logtofile(config.plot_path, config.logfile_name, "\nCONFIG: {}\nEpochs:{}\nTrainEvents:{}\nTestEvents:{}\nTracks: {}\nTracks Delta: {}\nBatch Size: {}".format(config.plot_dir_name, config.total_epochs, config.train_samples, config.test_samples, config.input_classes, config.input_class_delta, config.batch_size))
     logtofile(config.plot_path, config.logfile_name, "MODEL:\nInputDim={}\nHiddenDim={}\nOutputDim={}\nconfig.interm_out={}\nNcatsOut={}\nNPropsOut={}\nConvDepth={}\nKNN_k={}\nEdgeCatDepth={}".format(
                                                 config.input_dim,config.hidden_dim,config.output_dim,config.interm_out,config.ncats_out,config.nprops_out,config.conv_depth,config.k,config.edgecat_depth))
     logtofile(config.plot_path, config.logfile_name, "LEARNING RATE:\nParamgp1:{:.3e}\nParamgp2:{:.3e}\nParamgp3:{:.3e}".format(lr_param_gp_1, lr_param_gp_2, lr_param_gp_3))
@@ -637,7 +819,7 @@ if __name__ == "__main__":
 
 
         '''Learning Curve / Clusters / Centers'''
-        if(config.make_plots==True):
+        if(config.make_train_plots==True):
 
             '''Plot Learning Curve'''
             fig = plt.figure(figsize=(20,10))
@@ -674,3 +856,4 @@ if __name__ == "__main__":
     }
     with open(config.plot_path+'/testing.pickle', 'wb') as handle:
         pickle.dump(testing_dict, handle, protocol=pickle.HIGHEST_PROTOCOL)
+      

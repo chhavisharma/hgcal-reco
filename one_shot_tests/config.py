@@ -1,5 +1,4 @@
-'''
-==========================================
+'''=======================================
 [CONFIG INSTRUCTIONS]
 
 -> To train from scratch, set
@@ -12,13 +11,17 @@ epochs = <remaining number of epochs to train>
 -> To run only tests, set
 load_checkpoint_path = <path_to_checkpoint>
 testing_mode = True
-==========================================
-'''
+
+-> To plot during train/test (slow), set 
+make_train_plots = True
+make_test_plots  = True
+make_test_efficiency_plots = True
+=========================================='''
 
 from os.path import expanduser
 home = expanduser("~")
 
-# DATA ROOT
+# Data Root
 data_root    = home+'/prototyping/data/trackml/'
 volume_layer_ids = [
     [8, 2], [8, 4], [8, 6], [8, 8], # barrel pixels
@@ -27,27 +30,40 @@ volume_layer_ids = [
 ]
 full_dataset = False
 
-load_checkpoint_path = './checkpoints/train_event1000_epoch500_classes400_delta20/event1000_classes400_epoch430_loss7.79386e-02_edgeAcc9.25365e-01_checkpoint.pt'
-logfile_name = 'training.log'
+
+# Train / Test / Checkpoint
+load_checkpoint_path = False #'./checkpoints/train_event1000_epoch70_classes400_delta20/best_model_checkpoint.pt'
 testing_mode = False
 
-total_epochs  = 70 # was 430 earlier
-train_samples = 1000
-batch_size    = 20 #this is a batch by hand so be careful | needs to be a factor of train size
-test_samples  = 500
-input_classes = 400
-input_class_delta = 20  # sqrt(input_classes)
+total_epochs      = 500
+train_samples     = 1000
+batch_size        = 20 # this is a batch by hand so be careful | needs to be a factor of train_samples size
+test_samples      = 500
+input_classes     = 600
+input_class_delta = 25  # ~sqrt(input_classes)
 
+
+# Logging Paths
 dir_prefix      = 'test_event'+str(test_samples) if testing_mode else 'train_event'+str(train_samples)
+
 plot_dir_root   = './plots/'
 plot_dir_name   = dir_prefix + '_epoch'+str(total_epochs)+'_classes'+str(input_classes)+'_delta'+str(input_class_delta)
 plot_path       = plot_dir_root+plot_dir_name+'/'
 
-# Save Checkpoints Path
+logfile_name    = 'training.log'
+
 checkpoint_dir  = './checkpoints/'
 checkpoint_path = checkpoint_dir+plot_dir_name
 
+
+# Plots
+make_train_plots = False
+make_test_plots  = False
+make_test_efficiency_plots = False
+
+
 ## MODEL
+
 # Embedding Dim
 input_dim  = 3
 hidden_dim = 32
@@ -62,8 +78,6 @@ nprops_out = 3
 k             = 8 
 conv_depth    = 3
 edgecat_depth = 6  # TRY DEPTH==3,tried - kills edgenet's performance
-make_plots   = True
-make_test_plots = True
 
 
 # Learning Rates
